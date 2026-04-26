@@ -165,7 +165,7 @@ export default function Navbar() {
       </AnimatePresence>
 
       {/* Mobile bottom navigation bar */}
-      <nav className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex justify-around items-center py-2 lg:hidden">
+      <nav className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex justify-around items-center py-2 pb-safe lg:hidden z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
         <Link to="/" className="flex flex-col items-center text-slate-600 hover:text-brand-blue">
           <Home size={20} />
           <span className="text-xs">Головна</span>

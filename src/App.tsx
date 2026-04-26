@@ -135,7 +135,7 @@ export default function App() {
             <Footer />
 
             {/* Floating Call Button */}
-            <div className="fixed bottom-6 right-6 z-[60] flex flex-col gap-3 group">
+            <div className="fixed bottom-20 md:bottom-6 right-6 z-[60] flex flex-col gap-3 group">
               <motion.a
                 href="https://t.me/vips_cars"
                 target="_blank"
