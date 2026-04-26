@@ -227,7 +227,19 @@ export default function CarForm({ initialData, onSave, onCancel }: any) {
              <div className="flex gap-4">
                 <button onClick={onCancel} className="px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-red-500">Скасувати</button>
                 {step < 4 ? (
-                  <button onClick={() => setStep(step + 1)} className="px-10 py-4 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-xl">Далі <ChevronRight size={18} /></button>
+                  <button 
+                    disabled={
+                      (step === 1 && (!formData.make || !formData.model || !formData.price)) ||
+                      (step === 3 && formData.images.length === 0)
+                    }
+                    onClick={() => setStep(step + 1)} 
+                    className={cn(
+                      "px-10 py-4 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-xl transition-all",
+                      ((step === 1 && (!formData.make || !formData.model || !formData.price)) || (step === 3 && formData.images.length === 0)) ? "opacity-50 cursor-not-allowed" : "hover:bg-brand-blue"
+                    )}
+                  >
+                    Далі <ChevronRight size={18} />
+                  </button>
                 ) : (
                   <button onClick={() => onSave(formData)} className="px-10 py-4 bg-brand-blue text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-brand-blue/30">Зберегти <Save size={18} /></button>
                 )}

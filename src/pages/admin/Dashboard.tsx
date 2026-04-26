@@ -3,10 +3,11 @@ import { motion } from 'framer-motion';
 import { 
   Users, TrendingUp, Phone, MousePointer2, 
   BarChart3, ChevronRight, Zap, Brain, 
-  ArrowUpRight, ArrowDownRight
+  ArrowUpRight, ArrowDownRight, Car, MessageSquare
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { Tab } from './types';
+import { format } from 'date-fns';
 
 interface DashboardProps {
   leads?: any[];
@@ -25,24 +26,24 @@ export default function Dashboard({
 }: DashboardProps) {
   
   const kpis = [
-    { label: 'Відвідувачі', value: '347', trend: '+12%', up: true, icon: <Users size={20} /> },
-    { label: 'Заявки', value: (leads?.length || 0).toString(), trend: '+20%', up: true, icon: <TrendingUp size={20} /> },
-    { label: 'Дзвінки', value: '8', trend: '-5%', up: false, icon: <Phone size={20} /> },
-    { label: 'Конверсія', value: '3.5%', trend: '+0.4%', up: true, icon: <MousePointer2 size={20} /> },
+    { label: 'Авто в базі', value: stats.carsCount || 0, trend: '+2', up: true, icon: <Car size={20} /> },
+    { label: 'Всього лідів', value: stats.leadsCount || 0, trend: '+12%', up: true, icon: <TrendingUp size={20} /> },
+    { label: 'Користувачі', value: stats.usersCount || 0, trend: '+5', up: true, icon: <Users size={20} /> },
+    { label: 'AI Аналіз', value: aiLogsCount, trend: 'Активно', up: true, icon: <Brain size={20} /> },
   ];
 
-  const hotLeads = Array.isArray(leads) ? leads.filter(l => l.status === 'новий').slice(0, 3) : [];
+  const recentLeads = Array.isArray(leads) ? leads.slice(0, 5) : [];
 
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Дашборд</h1>
-          <p className="text-slate-500 text-sm font-medium mt-1">Огляд активності за сьогодні</p>
+          <p className="text-slate-500 text-sm font-medium mt-1">Огляд активності в реальному часі</p>
         </div>
         <div className="flex gap-2">
-           <button className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Оновити</button>
-           <button className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-blue transition-all">Звіт за місяць</button>
+           <button onClick={() => window.location.reload()} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Оновити</button>
+           <button onClick={() => setTab('analytics')} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-blue transition-all">Детальна аналітика</button>
         </div>
       </div>
 
@@ -68,7 +69,6 @@ export default function Dashboard({
                  "flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-lg",
                  kpi.up ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
                )}>
-                  {kpi.up ? <ArrowUpRight size={12}/> : <ArrowDownRight size={12}/>}
                   {kpi.trend}
                </div>
             </div>
@@ -85,100 +85,63 @@ export default function Dashboard({
         <div className="lg:col-span-2 bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm">
            <div className="flex justify-between items-center mb-10">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
-                 <BarChart3 className="text-brand-blue" /> Трафік та заявки
+                 <BarChart3 className="text-brand-blue" /> Трафік сайту
               </h2>
-              <div className="flex gap-2 bg-slate-50 p-1 rounded-xl">
-                 {['7д', '30д', '90д'].map(d => (
-                   <button key={d} className={cn("px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all", d === '7д' ? "bg-white text-slate-900 shadow-sm" : "text-slate-400")}>{d}</button>
-                 ))}
-              </div>
            </div>
            
            <div className="h-64 flex items-end gap-3 px-2 border-b border-slate-50">
               {Array.from({ length: 14 }).map((_, i) => {
                 const height = 40 + Math.random() * 60;
                 return (
-                  <div key={i} className="flex-1 group relative">
-                     <div 
-                       className="w-full bg-slate-50 rounded-t-xl transition-all group-hover:bg-brand-blue/10 relative"
-                       style={{ height: `${height}%` }}
-                     >
-                        <div className="absolute bottom-0 left-0 right-0 bg-brand-blue/20 rounded-t-xl group-hover:bg-brand-blue transition-all" style={{ height: `${Math.random() * 40}%` }} />
-                     </div>
+                  <div key={i} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                    <div className="w-full bg-slate-50 rounded-t-xl relative overflow-hidden min-h-[20px]" style={{ height: `${height}%` }}>
+                       <motion.div initial={{ height: 0 }} animate={{ height: '100%' }} transition={{ delay: i * 0.05 }} className="absolute bottom-0 left-0 w-full bg-brand-blue/10 group-hover:bg-brand-blue transition-all" />
+                    </div>
+                    <span className="text-[8px] font-black text-slate-300 uppercase">{14 - i}д</span>
                   </div>
                 );
               })}
            </div>
-           <div className="flex justify-between mt-4 text-[10px] font-black text-slate-300 uppercase tracking-widest">
-              <span>20 Квітня</span>
-              <span>Сьогодні</span>
+           <div className="mt-8 flex items-center justify-between text-xs font-bold text-slate-400">
+              <div className="flex items-center gap-4">
+                 <div className="flex items-center gap-1.5"><div className="w-2 h-2 bg-brand-blue rounded-full" /> Перегляди</div>
+                 <div className="flex items-center gap-1.5"><div className="w-2 h-2 bg-slate-100 rounded-full" /> Унікальні</div>
+              </div>
+              <p>Оновлено 5 хв тому</p>
            </div>
         </div>
 
-        <div className="space-y-6">
-           <div className="bg-slate-900 rounded-[32px] p-6 text-white shadow-xl shadow-slate-200">
-              <div className="flex items-center gap-3 mb-6">
-                 <div className="w-10 h-10 bg-brand-blue/20 rounded-xl flex items-center justify-center text-brand-blue">
-                    <Zap size={20} fill="currentColor" />
-                 </div>
-                 <div>
-                    <h3 className="text-sm font-black uppercase tracking-widest">Гарячі ліди</h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Вимагають уваги: {hotLeads.length}</p>
-                 </div>
-              </div>
-
-              <div className="space-y-3">
-                 {hotLeads.length > 0 ? hotLeads.map((lead, i) => (
-                   <div key={i} className="bg-white/5 p-3 rounded-2xl flex items-center justify-between group cursor-pointer hover:bg-white/10 transition-all border border-white/5">
-                      <div className="flex items-center gap-3 min-w-0">
-                         <div className="w-8 h-8 bg-brand-blue rounded-full flex items-center justify-center text-xs font-black italic shadow-lg">V</div>
-                         <div className="truncate">
-                            <div className="text-xs font-black truncate">{lead.name || 'Клієнт'}</div>
-                            <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{lead.type || 'Запит'}</div>
-                         </div>
-                      </div>
-                      <ChevronRight size={14} className="text-slate-600 group-hover:text-white transition-all" />
-                   </div>
-                 )) : (
-                    <div className="text-center py-4 text-slate-500 text-[10px] font-black uppercase tracking-widest">Немає нових лідів</div>
-                 )}
-              </div>
-
-              <button 
-                onClick={() => setTab('leads')}
-                className="w-full mt-6 py-3 bg-brand-blue text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white hover:text-slate-900 transition-all"
-              >
-                Всі ліди →
-              </button>
+        <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm">
+           <div className="flex justify-between items-center mb-8">
+              <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Нові заявки</h2>
+              <button onClick={() => setTab('leads')} className="text-brand-blue hover:underline"><ChevronRight size={20}/></button>
            </div>
-
-           <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400">
-                       <Brain size={20} />
-                    </div>
-                    <h3 className="text-xs font-black uppercase tracking-widest">AI Активність</h3>
-                 </div>
-                 <div className="text-xs font-black text-brand-blue">{aiLogsCount || 47}</div>
-              </div>
-              <div className="space-y-4">
-                 {[
-                   { label: 'Оновлено SEO для BMW X5', time: '2 хв тому' },
-                   { label: 'Згенеровано опис Audi Q8', time: '15 хв тому' },
-                   { label: 'Перевірка дублікатів', time: '40 хв тому' }
-                 ].map((log, i) => (
-                   <div key={i} className="flex items-start gap-3">
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1.5" />
-                      <div>
-                         <div className="text-[11px] font-bold text-slate-700">{log.label}</div>
-                         <div className="text-[9px] text-slate-400 font-medium uppercase">{log.time}</div>
-                      </div>
-                   </div>
-                 ))}
-              </div>
-              <button onClick={() => setTab('ai')} className="w-full mt-6 py-2.5 bg-slate-50 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all">Дивитись логи</button>
+           
+           <div className="space-y-4">
+              {recentLeads.length === 0 ? (
+                <div className="py-10 text-center space-y-3">
+                   <MessageSquare size={32} className="mx-auto text-slate-200" />
+                   <p className="text-xs font-bold text-slate-400 uppercase">Немає нових заявок</p>
+                </div>
+              ) : (
+                recentLeads.map((lead, i) => (
+                  <div key={lead.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4 group hover:bg-white hover:shadow-lg transition-all cursor-pointer">
+                     <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 group-hover:text-brand-blue transition-colors shadow-sm">
+                        <Phone size={18} />
+                     </div>
+                     <div className="flex-1 min-w-0">
+                        <div className="text-xs font-black text-slate-900 truncate">{lead.name || 'Клієнт'}</div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{lead.type || 'Запит'}</div>
+                     </div>
+                     <div className="text-[9px] font-black text-slate-300">{format(new Date(lead.created_at), 'HH:mm')}</div>
+                  </div>
+                ))
+              )}
            </div>
+           
+           <button onClick={() => setTab('leads')} className="w-full mt-8 py-4 bg-slate-50 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-brand-blue hover:text-white transition-all">
+              Всі ліди
+           </button>
         </div>
       </div>
     </div>

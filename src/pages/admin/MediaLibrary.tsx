@@ -10,14 +10,14 @@ export default function MediaLibrary() {
 
   async function loadFiles() {
     setLoading(true);
-    const { data } = await supabase.storage.from('cars').list();
+    const { data } = await supabase.storage.from('cars-media').list();
     setFiles(data || []);
     setLoading(false);
   }
 
   async function deleteFile(name: string) {
     if (!confirm('Видалити файл з хмари?')) return;
-    await supabase.storage.from('cars').remove([name]);
+    await supabase.storage.from('cars-media').remove([name]);
     loadFiles();
   }
 
@@ -31,7 +31,7 @@ export default function MediaLibrary() {
         {files.map(f => (
           <div key={f.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden group shadow-sm hover:shadow-md transition-all">
             <div className="aspect-square bg-slate-50 relative overflow-hidden">
-              <img src={supabase.storage.from('cars').getPublicUrl(f.name).data.publicUrl} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="" />
+              <img src={supabase.storage.from('cars-media').getPublicUrl(f.name).data.publicUrl} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="" />
               <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 <button onClick={() => deleteFile(f.name)} className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"><Trash2 size={16} /></button>
               </div>

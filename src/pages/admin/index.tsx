@@ -53,7 +53,7 @@ export default function AdminPanel() {
   const fetchStats = async () => {
     const [cars, leads, users] = await Promise.all([
       supabase.from('cars').select('id', { count: 'exact' }),
-      supabase.from('leads').select('*', { count: 'exact' }).order('created_at', { ascending: false }).limit(5),
+      supabase.from('leads').select('*').order('created_at', { ascending: false }).limit(10),
       supabase.from('profiles').select('id', { count: 'exact' })
     ]);
 
@@ -62,7 +62,7 @@ export default function AdminPanel() {
       leadsCount: leads.count || 0,
       usersCount: users.count || 0,
       activeLeads: leads.data || [],
-      recentCars: [] // Можна додати вибірку останніх авто
+      recentCars: []
     });
   };
 

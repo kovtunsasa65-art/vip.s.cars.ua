@@ -99,15 +99,15 @@ export default function CarDetails() {
     async function load() {
       if (!id) return;
       // Пробуємо по slug спочатку, потім по id
-      let { data } = await supabase.from('cars').select('*, car_images(*)').eq('seo_slug', id).maybeSingle();
+      let { data } = await supabase.from('cars').select('*').eq('seo_slug', id).maybeSingle();
       if (!data) {
-        const r = await supabase.from('cars').select('*, car_images(*)').eq('id', id).maybeSingle();
+        const r = await supabase.from('cars').select('*').eq('id', id).maybeSingle();
         data = r.data;
       }
       if (data) {
         setCar(data);
-        // Збираємо зображення
-        const imgs: string[] = data.car_images?.map((i: any) => i.url) ?? data.images ?? [];
+        // Збираємо зображення (масив images з таблиці cars)
+        const imgs: string[] = data.images ?? [];
         setImages(imgs.length ? imgs : ['https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=800']);
         // Лічимо перегляд
         supabase.from('cars').update({ views_count: (data.views_count ?? 0) + 1 }).eq('id', data.id).then();

@@ -40,7 +40,7 @@ export default function ComparePage() {
 
   useEffect(() => {
     if (!ids.length) { setLoading(false); return; }
-    supabase.from('cars').select('*, car_images(url, is_cover)').in('id', ids)
+    supabase.from('cars').select('*').in('id', ids)
       .then(({ data }) => { setCars(data ?? []); setLoading(false); });
   }, [params.get('ids')]);
 
@@ -71,7 +71,7 @@ export default function ComparePage() {
                   <tr className="border-b border-slate-100">
                     <th className="w-36 p-4 text-left text-xs font-black text-slate-400 uppercase tracking-wide">Характеристика</th>
                     {cars.map(car => {
-                      const img = car.car_images?.find((i: any) => i.is_cover)?.url ?? car.car_images?.[0]?.url;
+                      const img = car.images?.[0];
                       return (
                         <th key={car.id} className="p-4 text-left min-w-[200px]">
                           <div className="relative">
