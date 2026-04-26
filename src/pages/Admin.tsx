@@ -1788,20 +1788,21 @@ export default function Admin() {
     if (!session) { navigate('/login'); return; }
     const { data: p } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
     
-    // Дозволяємо вхід якщо є роль АБО якщо це email власника (регістр не має значення)
     const userEmail = session.user.email?.toLowerCase() || '';
     const isOwner = userEmail === 'kovtunsasa65@gmail.com' || userEmail === 'kovtunsasa@gmail.com';
     
+    console.log('DEBUG AUTH:', { userEmail, isOwner, profile: p });
+
+    // ТИМЧАСОВО ВИМИКАЄМО РЕДІРЕКТ ДЛЯ ДІАГНОСТИКИ
     if (!isOwner && (!p || !['manager', 'editor', 'admin'].includes(p.role))) { 
-      console.log('Access denied for:', userEmail);
-      navigate('/'); 
-      return; 
+      console.warn('Access would be denied here, but we are in DEBUG mode.');
+      // navigate('/'); 
+      // return; 
     }
     
-    // Якщо це власник але профілю немає, створюємо віртуальний профіль
     setProfile(p || { 
-      name: session.user.user_metadata?.full_name || 'Owner', 
-      role: 'admin',
+      name: session.user.user_metadata?.full_name || 'Admin User', 
+      role: isOwner ? 'admin' : (p?.role || 'user'),
       email: userEmail 
     });
     const [{ data: l }, { data: c }, { data: s }, { count: ac }] = await Promise.all([
