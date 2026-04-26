@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Eye, Bell, LogOut, Phone, ChevronRight, X, Star, Car, Plus, ShieldCheck } from 'lucide-react';
+import { Heart, Eye, Bell, LogOut, Phone, ChevronRight, X, Star, Car, Plus, ShieldCheck, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
