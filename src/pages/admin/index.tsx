@@ -16,8 +16,7 @@ import LeadsManager from './LeadsManager';
 import CarsManager from './CarsManager';
 import ModerationManager from './ModerationManager';
 
-// Тип для вкладок
-type Tab = 'dashboard' | 'cars' | 'leads' | 'moderation' | 'users' | 'seo' | 'analytics' | 'ai' | 'content' | 'settings';
+import { Tab } from './types';
 
 export default function AdminIndex() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');

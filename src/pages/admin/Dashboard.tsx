@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { 
   Users, TrendingUp, Phone, MousePointer2, 
-  BarChart3, ChevronRight, Zap, Eye, AlertCircle,
-  ArrowUpRight, ArrowDownRight, Clock
+  BarChart3, ChevronRight, Zap, Brain, 
+  ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { format } from 'date-fns';
+import type { Tab } from './types';
 
 interface DashboardProps {
   leads?: any[];
   cars?: any[];
   stats?: any;
   aiLogsCount?: number;
-  setTab?: (t: any) => void;
+  setTab?: (t: Tab) => void;
 }
 
 export default function Dashboard({ 
@@ -22,16 +22,16 @@ export default function Dashboard({
   stats = {}, 
   aiLogsCount = 0, 
   setTab = () => {} 
-}: DashboardProps) {
+}: DashboardProps): JSX.Element {
   
   const kpis = [
     { label: 'Відвідувачі', value: '347', trend: '+12%', up: true, icon: <Users size={20} /> },
-    { label: 'Заявки', value: leads.length.toString() || '0', trend: '+20%', up: true, icon: <TrendingUp size={20} /> },
+    { label: 'Заявки', value: (leads?.length || 0).toString(), trend: '+20%', up: true, icon: <TrendingUp size={20} /> },
     { label: 'Дзвінки', value: '8', trend: '-5%', up: false, icon: <Phone size={20} /> },
     { label: 'Конверсія', value: '3.5%', trend: '+0.4%', up: true, icon: <MousePointer2 size={20} /> },
   ];
 
-  const hotLeads = leads.filter(l => l.status === 'новий').slice(0, 3);
+  const hotLeads = Array.isArray(leads) ? leads.filter(l => l.status === 'новий').slice(0, 3) : [];
 
   return (
     <div className="space-y-8">
@@ -46,7 +46,6 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {kpis.map((kpi, i) => (
           <motion.div 
@@ -83,7 +82,6 @@ export default function Dashboard({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Chart Section */}
         <div className="lg:col-span-2 bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm">
            <div className="flex justify-between items-center mb-10">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
@@ -117,9 +115,7 @@ export default function Dashboard({
            </div>
         </div>
 
-        {/* Alerts & Logs Side */}
         <div className="space-y-6">
-           {/* Hot Leads */}
            <div className="bg-slate-900 rounded-[32px] p-6 text-white shadow-xl shadow-slate-200">
               <div className="flex items-center gap-3 mb-6">
                  <div className="w-10 h-10 bg-brand-blue/20 rounded-xl flex items-center justify-center text-brand-blue">
@@ -156,7 +152,6 @@ export default function Dashboard({
               </button>
            </div>
 
-           {/* AI Activities */}
            <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                  <div className="flex items-center gap-3">
