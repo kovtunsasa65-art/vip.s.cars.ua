@@ -11,45 +11,23 @@ export default function Dashboard({ leads, cars, stats, aiLogsCount, setTab }: {
   const [range, setRange] = useState(7);
   const totalViews = cars.reduce((s, c) => s + (c.views_count ?? 0), 0);
   const hotLeads   = leads.filter(l => l.score === 'гарячий' && (l.status || 'новий') === 'новий');
-  const chartData  = stats.slice(0, range).reverse();
+import { motion } from 'framer-motion';
+
+export default function Dashboard() {
+  const kpis = [
+    { label: 'Відвідувачі', value: '347', trend: '+12%', up: true, icon: <Users size={20} /> },
+    { label: 'Заявки', value: '12', trend: '+20%', up: true, icon: <TrendingUp size={20} /> },
+    { label: 'Дзвінки', value: '8', trend: '-5%', up: false, icon: <Phone size={20} /> },
+    { label: 'Конверсія', value: '3.5%', trend: '+0.4%', up: true, icon: <MousePointer2 size={20} /> },
+  ];
+
+  const topCars = [
+    { id: 1, name: 'BMW X5 M-Pack', views: 1240, leads: 15, img: 'https://via.placeholder.com/100' },
+    { id: 2, name: 'Audi Q8 S-Line', views: 980, leads: 12, img: 'https://via.placeholder.com/100' },
+    { id: 3, name: 'Mercedes GLE 63', views: 850, leads: 8, img: 'https://via.placeholder.com/100' },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Відвідувачі"  value={totalViews.toLocaleString()} trend={12} icon={<Eye size={20} />}      color="blue"   sub="за весь час" />
-        <KpiCard title="Заявки"       value={leads.length}                trend={20} icon={<Users size={20} />}    color="green"  sub="всього в базі" />
-        <KpiCard title="AI-Дії"       value={aiLogsCount}                            icon={<Zap size={20} />}      color="orange" sub="автоматизацій" />
-        <KpiCard title="Бюджет лідів" value={`$${leads.reduce((s, l) => s + (parseInt(l.budget?.replace(/[^0-9]/g, '') || '0')), 0).toLocaleString()}`} icon={<BarChart3 size={20} />} color="red" sub="потенційний дохід" />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div onClick={() => setTab('leads')} className="bg-red-500 rounded-2xl p-5 text-white flex items-center justify-between cursor-pointer hover:bg-red-600 transition-all shadow-lg shadow-red-100 group">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center"><Zap size={24} className="animate-pulse" /></div>
-            <div>
-              <div className="text-lg font-black leading-none">Гарячі ліди: {hotLeads.length}</div>
-              <div className="text-xs text-white/70 mt-1 uppercase tracking-wider font-bold">Потребують термінового дзвінка</div>
-            </div>
-          </div>
-          <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="font-black text-slate-900 flex items-center gap-2"><BarChart3 size={18} className="text-brand-blue" /> Трафік та Заявки</h2>
-            <div className="flex bg-slate-100 p-1 rounded-lg">
-              {[7, 30, 90].map(d => (
-                <button key={d} onClick={() => setRange(d)} className={cn('px-3 py-1 text-xs font-bold rounded-md transition-all', range === d ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400')}>
-                  {d}д
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="h-64 flex items-end gap-2 px-2">
-            {chartData.length > 0 ? chartData.map((d, i) => (
-              <div key={i} className="flex-1 bg-slate-50 rounded-t-lg relative group">
                 <div className="absolute bottom-0 left-0 right-0 bg-brand-blue/10 rounded-t-lg transition-all group-hover:bg-brand-blue/20" style={{ height: `${Math.min(100, (d.views / 500) * 100)}%` }}>
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-black py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
                     {d.views} відв.

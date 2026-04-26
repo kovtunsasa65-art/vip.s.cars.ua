@@ -40,52 +40,58 @@ export default function AdminIndex() {
     const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
     setProfile(data);
   };
-
-  const fetchInitialData = async () => {
-    const [carsRes, leadsRes] = await Promise.all([
-      supabase.from('cars').select('*'),
-      supabase.from('leads').select('*').order('created_at', { ascending: false })
-    ]);
-    setStats({ cars: carsRes.data || [], leads: leadsRes.data || [] });
-  };
-
   const menuItems = [
-    { id: 'dashboard', label: 'Дашборд', icon: <LayoutDashboard size={18} /> },
-    { id: 'cars', label: 'Каталог Авто', icon: <Car size={18} /> },
-    { id: 'moderation', label: 'Модерація', icon: <ShieldCheck size={18} />, badge: stats.cars.filter((c: any) => c.status === 'moderation').length },
-    { id: 'leads', label: 'CRM / Ліди', icon: <Users size={18} />, badge: stats.leads.filter((l: any) => l.status === 'новий').length },
-    { id: 'analytics', label: 'Аналітика', icon: <BarChart3 size={18} /> },
-    { id: 'seo', label: 'SEO Оптимізація', icon: <Globe size={18} /> },
-    { id: 'ai', label: 'AI Налаштування', icon: <Brain size={18} /> },
-    { id: 'content', label: 'Контент', icon: <FileText size={18} /> },
-    { id: 'media', label: 'Медіатека', icon: <Image size={18} /> },
-    { id: 'users', label: 'Менеджери', icon: <Users size={18} /> },
-    { id: 'settings', label: 'Налаштування', icon: <Settings size={18} /> },
+    { id: 'dashboard', label: 'Дашборд', icon: <BarChart3 size={20} /> },
+    { id: 'cars', label: 'Авто', icon: <Car size={20} /> },
+    { id: 'leads', label: 'Ліди (CRM)', icon: <Users size={20} /> },
+    { id: 'users', label: 'Користувачі', icon: <UserCircle size={20} /> },
+    { id: 'seo', label: 'SEO', icon: <Globe size={20} /> },
+    { id: 'analytics', label: 'Аналітика', icon: <TrendingUp size={20} /> },
+    { id: 'ai', label: '🤖 AI', icon: <Zap size={20} /> },
+    { id: 'content', label: 'Контент', icon: <FileText size={20} /> },
+    { id: 'settings', label: 'Налаштування', icon: <Settings size={20} /> },
   ];
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/admin-login');
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard': return <Dashboard />;
+      case 'cars': return <CarsManager />;
+      case 'leads': return <LeadsManager />;
+      case 'users': return <UsersManager />;
+      case 'seo': return <SeoManager />;
+      case 'analytics': return <AnalyticsManager />;
+      case 'ai': return <AiManager />;
+      case 'content': return <ContentManager />;
+      case 'settings': return <SettingsPanel />;
+      default: return (
+        <div className="flex flex-col items-center justify-center h-[60vh] text-slate-300">
+          <ShieldCheck size={64} className="mb-4 opacity-20" />
+          <p className="text-sm font-black uppercase tracking-[0.2em]">Розділ у розробці</p>
+        </div>
+      );
+    }
   };
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC] overflow-hidden font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-slate-900">
       {/* Sidebar */}
-      <aside className={cn(
-        "bg-white border-r border-slate-200 transition-all duration-300 flex flex-col z-50",
-        isSidebarOpen ? "w-64" : "w-20"
-      )}>
-        <div className="p-6 flex items-center justify-between border-b border-slate-50">
-          <div className={cn("flex items-center gap-2 font-black text-slate-900 transition-opacity", !isSidebarOpen && "opacity-0 w-0 overflow-hidden")}>
-            <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center text-white">V</div>
-            <span>VIP.S <span className="text-brand-blue text-xs ml-1">ADMIN</span></span>
-          </div>
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400">
-            {isSidebarOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
+      <motion.aside 
+        initial={false}
+        animate={{ width: isSidebarOpen ? 280 : 80 }}
+        className="bg-white border-r border-slate-200 flex flex-col sticky top-0 h-screen z-50 shadow-sm"
+      >
+        <div className="p-6 flex items-center justify-between">
+           {isSidebarOpen ? (
+             <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center text-white font-black italic shadow-lg shadow-brand-blue/30">V</div>
+                <span className="font-black text-lg tracking-tighter">VIP.S <span className="text-brand-blue">CARS</span></span>
+             </div>
+           ) : (
+             <div className="w-8 h-8 bg-brand-blue rounded-lg mx-auto flex items-center justify-center text-white font-black italic shadow-lg shadow-brand-blue/30">V</div>
+           )}
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
+        <nav className="flex-1 px-4 space-y-2 mt-4">
           {menuItems.map((item) => (
             <button
               key={item.id}
