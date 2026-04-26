@@ -1,19 +1,35 @@
-import React, { useState, useEffect } from 'react';
 import { 
   Plus, Search, Filter, MoreHorizontal, 
-  Edit3, Trash2, ExternalLink, RefreshCw 
+  Edit3, Trash2, ExternalLink, RefreshCw, X 
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
+import CarForm from './CarForm';
 
 export default function CarsManager() {
   const [cars, setCars] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
 
   useEffect(() => {
     fetchCars();
   }, []);
+
+  const handleSave = async (data: any) => {
+    const { error } = await supabase.from('cars').upsert(data);
+    if (error) {
+      toast.error('Помилка збереження');
+    } else {
+      toast.success('Авто збережено успішно!');
+      setIsAdding(false);
+      fetchCars();
+    }
+  };
+
+  if (isAdding) {
+    return <CarForm onSave={handleSave} onCancel={() => setIsAdding(false)} />;
+  }
 
   const fetchCars = async () => {
     setLoading(true);
@@ -37,7 +53,10 @@ export default function CarsManager() {
           <h1 className="text-xl font-black text-slate-900">🚗 Управління Каталогом</h1>
           <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">Перегляд та редагування автомобілів</p>
         </div>
-        <button className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg">
+        <button 
+          onClick={() => setIsAdding(true)}
+          className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg"
+        >
           <Plus size={16} /> Додати Авто
         </button>
       </div>
