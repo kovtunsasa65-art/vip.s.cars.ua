@@ -2,60 +2,98 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Check, ChevronRight, ChevronLeft, Save, 
   Camera, Sparkles, Search, Globe, 
-  Gauge, Info, AlertCircle, Eye, Zap
+  Gauge, Info, AlertCircle, Eye, Zap, Trash2, X
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
+
+// Довідник даних
+const CAR_DATA = {
+  makes: ['BMW', 'Mercedes-Benz', 'Audi', 'Porsche', 'Volkswagen', 'Lexus', 'Toyota'],
+  models: {
+    'BMW': ['X5', 'X7', 'M5', '5 Series', '7 Series', 'X3'],
+    'Mercedes-Benz': ['GLE', 'GLS', 'S-Class', 'E-Class', 'G-Wagon'],
+    'Audi': ['Q7', 'Q8', 'A6', 'A8', 'RS6'],
+    'Porsche': ['Cayenne', 'Panamera', '911', 'Taycan'],
+    'Volkswagen': ['Touareg', 'Tiguan', 'Golf'],
+    'Lexus': ['RX', 'LX', 'GX', 'ES'],
+    'Toyota': ['Land Cruiser', 'Prado', 'Camry']
+  },
+  years: Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i),
+  engines: ['2.0', '2.5', '3.0', '4.0', '4.4', '5.0', 'Electric']
+};
 
 export default function CarForm({ initialData, onSave, onCancel }: any) {
   const [step, setStep] = useState(1);
+  const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState(initialData || {
     make: '', model: '', year: 2024, price: '',
-    engine: '', transmission: '', mileage: '', fuel: '',
-    images: [], description: '', seo_title: '', seo_description: '',
-    trust_score: 0, market_median: 0, status: 'moderation'
+    engine: '', transmission: 'Automatic', mileage: '', fuel: 'Diesel',
+    images: [] as string[], description: '', seo_title: '', seo_description: '',
+    trust_score: 0, status: 'moderation'
   });
-
-  const steps = [
-    { id: 1, label: 'Основне', icon: <Info size={16} /> },
-    { id: 2, label: 'Характеристики', icon: <Gauge size={16} /> },
-    { id: 3, label: 'Фото', icon: <Camera size={16} /> },
-    { id: 4, label: 'Опис + SEO', icon: <Globe size={16} /> },
-  ];
-
-  // Автодії при збереженні
-  const performAutoActions = (data: any) => {
-    let score = 85; // Базовий скор
-    if (!data.images.length) score -= 30;
-    if (!data.description) score -= 20;
-    if (data.price < 1000) score -= 10;
-    
-    return {
-      ...data,
-      trust_score: Math.max(0, score),
-      market_median: Number(data.price) * 1.05, // Імітація медіани
-      ai_triggered: data.status === 'active'
-    };
-  };
-
-  const handleFinalSave = () => {
-    const finalData = performAutoActions(formData);
-    toast.success('Автодії виконано: Trust Score розраховано, SEO згенеровано');
-    onSave(finalData);
-  };
 
   const updateField = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  // Логіка завантаження фото
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    const toastId = toast.loading('Завантаження фото...');
+
+    try {
+      const uploadedUrls: string[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `cars/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('cars-media')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('cars-media')
+          .getPublicUrl(filePath);
+
+        uploadedUrls.push(publicUrl);
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, ...uploadedUrls]
+      }));
+      toast.success('Фото завантажено!', { id: toastId });
+    } catch (error: any) {
+      toast.error('Помилка завантаження: ' + error.message, { id: toastId });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
   };
 
   return (
     <div className="flex flex-col lg:flex-row gap-8 min-h-[700px] bg-slate-50/30 p-4 rounded-[40px]">
       {/* Form Side */}
       <div className="flex-1 space-y-6">
-        <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+        <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl overflow-hidden">
           {/* Header */}
           <div className="px-8 py-6 bg-white border-b border-slate-100 flex justify-between items-center relative overflow-hidden">
-             {/* Progress bar background */}
              <div className="absolute bottom-0 left-0 h-1 bg-brand-blue/10 w-full" />
              <motion.div 
                className="absolute bottom-0 left-0 h-1 bg-brand-blue z-10"
@@ -63,67 +101,55 @@ export default function CarForm({ initialData, onSave, onCancel }: any) {
                animate={{ width: `${(step / 4) * 100}%` }}
              />
              
-             {steps.map((s, i) => (
-               <div key={s.id} className="flex items-center gap-3 z-20">
+             {[1, 2, 3, 4].map((s) => (
+               <div key={s} className="flex items-center gap-3 z-20">
                  <div className={cn(
-                   "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition-all duration-500",
-                   step >= s.id ? "bg-brand-blue text-white shadow-lg shadow-brand-blue/30 scale-110" : "bg-slate-50 text-slate-300"
+                   "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition-all",
+                   step >= s ? "bg-brand-blue text-white shadow-lg" : "bg-slate-50 text-slate-300"
                  )}>
-                   {step > s.id ? <Check size={18} /> : s.id}
+                   {step > s ? <Check size={18} /> : s}
                  </div>
-                 {step === s.id && (
-                   <motion.span initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 hidden md:block">
-                     {s.label}
-                   </motion.span>
-                 )}
                </div>
              ))}
           </div>
 
           <div className="p-10 min-h-[450px]">
             <AnimatePresence mode="wait">
-              <motion.div
-                key={step}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
-              >
+              <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                
                 {step === 1 && (
                   <div className="space-y-8">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Zap size={20} className="text-amber-500 fill-amber-500" />
-                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Основні дані</h2>
-                    </div>
-                    <div className="grid grid-cols-2 gap-8">
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Марка з довідника</label>
-                        <select className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue focus:bg-white outline-none transition-all appearance-none cursor-pointer"
-                          value={formData.make} onChange={e => updateField('make', e.target.value)}>
+                    <h2 className="text-2xl font-black text-slate-900">Крок 1: Основне</h2>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Марка</label>
+                        <select className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue outline-none transition-all cursor-pointer"
+                          value={formData.make} onChange={e => { updateField('make', e.target.value); updateField('model', ''); }}>
                           <option value="">Виберіть марку...</option>
-                          <option value="BMW">BMW</option>
-                          <option value="Mercedes-Benz">Mercedes-Benz</option>
-                          <option value="Audi">Audi</option>
-                          <option value="Porsche">Porsche</option>
+                          {CAR_DATA.makes.map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
                       </div>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Модель</label>
-                        <input className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue focus:bg-white outline-none transition-all"
-                          placeholder="Напр. X5 M" value={formData.model} onChange={e => updateField('model', e.target.value)} />
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Модель</label>
+                        <select className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue outline-none transition-all cursor-pointer"
+                          value={formData.model} onChange={e => updateField('model', e.target.value)} disabled={!formData.make}>
+                          <option value="">Виберіть модель...</option>
+                          {formData.make && CAR_DATA.models[formData.make as keyof typeof CAR_DATA.models]?.map(m => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
                       </div>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Рік випуску</label>
-                        <input type="number" className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue focus:bg-white outline-none transition-all"
-                          value={formData.year} onChange={e => updateField('year', e.target.value)} />
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Рік</label>
+                        <select className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue outline-none transition-all cursor-pointer"
+                          value={formData.year} onChange={e => updateField('year', Number(e.target.value))}>
+                          {CAR_DATA.years.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
                       </div>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Ціна продажу ($)</label>
-                        <div className="relative">
-                          <input type="number" className="w-full bg-brand-blue/5 border-2 border-brand-blue/10 rounded-2xl px-5 py-4 text-lg font-black text-brand-blue focus:border-brand-blue focus:bg-white outline-none transition-all"
-                            placeholder="0" value={formData.price} onChange={e => updateField('price', e.target.value)} />
-                          <span className="absolute right-5 top-1/2 -translate-y-1/2 text-brand-blue/40 font-black">$</span>
-                        </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ціна ($)</label>
+                        <input type="number" className="w-full bg-brand-blue/5 border-2 border-brand-blue/10 rounded-2xl px-5 py-4 text-sm font-black text-brand-blue focus:border-brand-blue outline-none transition-all"
+                          placeholder="0.00" value={formData.price} onChange={e => updateField('price', e.target.value)} />
                       </div>
                     </div>
                   </div>
@@ -131,52 +157,96 @@ export default function CarForm({ initialData, onSave, onCancel }: any) {
 
                 {step === 2 && (
                   <div className="space-y-8">
-                     <div className="flex items-center gap-3">
-                      <Gauge size={20} className="text-brand-blue" />
-                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Характеристики</h2>
+                    <h2 className="text-2xl font-black text-slate-900">Крок 2: Характеристики</h2>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Двигун (Об'єм)</label>
+                        <select className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue outline-none transition-all cursor-pointer"
+                          value={formData.engine} onChange={e => updateField('engine', e.target.value)}>
+                          <option value="">Виберіть об'єм...</option>
+                          {CAR_DATA.engines.map(e => <option key={e} value={e}>{e}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Коробка передач</label>
+                        <select className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue outline-none transition-all cursor-pointer"
+                          value={formData.transmission} onChange={e => updateField('transmission', e.target.value)}>
+                          <option value="Automatic">Автомат</option>
+                          <option value="Manual">Механіка</option>
+                          <option value="Robot">Робот</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Паливо</label>
+                        <select className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue outline-none transition-all cursor-pointer"
+                          value={formData.fuel} onChange={e => updateField('fuel', e.target.value)}>
+                          <option value="Diesel">Дизель</option>
+                          <option value="Petrol">Бензин</option>
+                          <option value="Electric">Електро</option>
+                          <option value="Hybrid">Гібрид</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Пробіг (км)</label>
+                        <input type="number" className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue outline-none transition-all"
+                          placeholder="0" value={formData.mileage} onChange={e => updateField('mileage', e.target.value)} />
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-8">
-                      {['Двигун', 'Пробіг', 'Коробка', 'Привід'].map(label => (
-                        <div key={label} className="space-y-3">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">{label}</label>
-                          <input className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-bold focus:border-brand-blue focus:bg-white transition-all" />
+                  </div>
+                )}
+
+                {step === 3 && (
+                  <div className="space-y-8">
+                    <div className="flex justify-between items-center">
+                      <h2 className="text-2xl font-black text-slate-900">Крок 3: Фото</h2>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Макс 20 фото</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-4 gap-4">
+                      {/* Upload Button */}
+                      <label className="aspect-square border-4 border-dashed border-slate-100 rounded-3xl flex flex-col items-center justify-center gap-2 hover:bg-slate-50 cursor-pointer transition-all group relative overflow-hidden">
+                        <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                        {uploading ? (
+                          <div className="flex flex-col items-center gap-2">
+                            <RefreshCw size={24} className="text-brand-blue animate-spin" />
+                            <span className="text-[9px] font-black text-brand-blue uppercase">Uploading...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <Camera size={24} className="text-slate-300 group-hover:text-brand-blue transition-colors" />
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Додати</span>
+                          </>
+                        )}
+                      </label>
+
+                      {/* Images Preview */}
+                      {formData.images.map((url, i) => (
+                        <div key={i} className="aspect-square rounded-3xl bg-slate-100 relative group overflow-hidden border border-slate-200">
+                          <img src={url} className="w-full h-full object-cover" />
+                          <button onClick={() => removeImage(i)} className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-lg">
+                            <Trash2 size={12} />
+                          </button>
+                          {i === 0 && (
+                            <div className="absolute bottom-2 left-2 px-2 py-1 bg-brand-blue text-white text-[8px] font-black uppercase rounded-md shadow-lg">Обкладинка</div>
+                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {step === 3 && (
-                   <div className="space-y-8">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Camera size={20} className="text-brand-blue" />
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Фотогалерея</h2>
-                      </div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Auto-crop: ON</span>
-                    </div>
-                    <div className="aspect-video border-4 border-dashed border-slate-100 rounded-[32px] flex flex-col items-center justify-center gap-4 hover:bg-slate-50/50 transition-all cursor-pointer group">
-                       <div className="w-16 h-16 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                          <Camera size={32} />
-                       </div>
-                       <p className="text-xs font-black uppercase tracking-widest text-slate-400">Drag & Drop Photos</p>
-                    </div>
-                  </div>
-                )}
-
                 {step === 4 && (
-                   <div className="space-y-8">
-                    <div className="flex items-center justify-between">
-                       <div className="flex items-center gap-3">
-                        <Sparkles size={20} className="text-brand-blue" />
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Опис + SEO</h2>
-                      </div>
+                  <div className="space-y-8">
+                    <h2 className="text-2xl font-black text-slate-900">Крок 4: Опис + AI</h2>
+                    <div className="space-y-4">
+                      <textarea className="w-full bg-slate-50 border-2 border-slate-50 rounded-[32px] p-8 text-sm font-medium focus:bg-white focus:border-brand-blue transition-all outline-none resize-none" 
+                        rows={8} placeholder="Розкажіть про авто..." value={formData.description} onChange={e => updateField('description', e.target.value)} />
                       <div className="flex gap-2">
-                         <button className="px-4 py-2 bg-brand-blue/10 text-brand-blue rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-blue hover:text-white transition-all">AI: Покращити</button>
-                         <button className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all">AI: SEO</button>
+                         <button className="flex-1 py-4 bg-brand-blue/10 text-brand-blue rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-brand-blue hover:text-white transition-all flex items-center justify-center gap-2">
+                           <Sparkles size={16} /> AI: Покращити опис
+                         </button>
                       </div>
                     </div>
-                    <textarea className="w-full bg-slate-50 border-2 border-slate-50 rounded-[32px] p-8 text-sm font-medium focus:bg-white focus:border-brand-blue transition-all outline-none resize-none" rows={6} placeholder="Напишіть щось особливе про це авто..." />
                   </div>
                 )}
               </motion.div>
@@ -184,79 +254,35 @@ export default function CarForm({ initialData, onSave, onCancel }: any) {
           </div>
 
           {/* Actions */}
-          <div className="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center">
+          <div className="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex justify-between">
              <button onClick={() => step > 1 && setStep(step - 1)} className={cn("text-xs font-black uppercase tracking-widest flex items-center gap-2", step === 1 ? "opacity-0" : "text-slate-400 hover:text-slate-900")}>
                <ChevronLeft size={18} /> Назад
              </button>
              <div className="flex gap-4">
                 <button onClick={onCancel} className="px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-red-500">Скасувати</button>
                 {step < 4 ? (
-                  <button onClick={() => setStep(step + 1)} className="px-10 py-4 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 shadow-xl shadow-slate-900/20 flex items-center gap-2">Далі <ChevronRight size={18} /></button>
+                  <button onClick={() => setStep(step + 1)} className="px-10 py-4 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-xl">Далі <ChevronRight size={18} /></button>
                 ) : (
-                  <button onClick={handleFinalSave} className="px-10 py-4 bg-brand-blue text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-blue-dark shadow-xl shadow-brand-blue/30 flex items-center gap-2">Опублікувати <Save size={18} /></button>
+                  <button onClick={() => onSave(formData)} className="px-10 py-4 bg-brand-blue text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-brand-blue/30">Зберегти <Save size={18} /></button>
                 )}
              </div>
           </div>
         </div>
       </div>
 
-      {/* Live Preview Sidebar */}
-      <div className="w-[420px] shrink-0">
-        <div className="sticky top-24 space-y-6">
-           <div className="flex items-center justify-between px-2">
-             <span className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2"><Eye size={16} /> Live Preview</span>
-             <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-[9px] font-black text-green-500 uppercase">Поточний вигляд</span>
-             </div>
+      {/* Preview Side */}
+      <div className="w-[400px] shrink-0">
+        <div className="sticky top-24 bg-white rounded-[40px] border border-slate-100 shadow-2xl overflow-hidden">
+           <div className="relative aspect-[16/10] bg-slate-100">
+             <img src={formData.images[0] || 'https://via.placeholder.com/600x400'} className="w-full h-full object-cover" />
+             <div className="absolute top-5 left-5 bg-black/60 backdrop-blur-xl px-4 py-2 rounded-2xl text-[11px] font-black text-white uppercase tracking-widest">{formData.year}</div>
            </div>
-
-           {/* The Preview Card */}
-           <div className="bg-white rounded-[40px] border border-slate-100 shadow-2xl overflow-hidden group">
-              <div className="relative aspect-[16/10] bg-slate-100">
-                <div className="absolute top-5 left-5 bg-black/60 backdrop-blur-xl px-4 py-2 rounded-2xl text-[11px] font-black text-white uppercase tracking-widest z-10">{formData.year}</div>
-                <img src="https://via.placeholder.com/600x400" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-              </div>
-              <div className="p-8 space-y-6">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-2">{formData.make || 'Марка'} {formData.model || 'Модель'}</h3>
-                    <div className="flex items-center gap-2 text-slate-400">
-                       <span className="text-[10px] font-black uppercase tracking-widest">{formData.engine || '3.0 L'}</span>
-                       <div className="w-1 h-1 rounded-full bg-slate-200" />
-                       <span className="text-[10px] font-black uppercase tracking-widest">Automatic</span>
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-brand-blue tracking-tighter">${Number(formData.price).toLocaleString()}</div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 py-6 border-y border-slate-50">
-                   <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400"><Gauge size={14} /></div>
-                      <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">{formData.mileage || '0'} KM</span>
-                   </div>
-                   <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400"><Sparkles size={14} /></div>
-                      <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">EXCELLENT</span>
-                   </div>
-                </div>
-
-                <button className="w-full py-5 bg-slate-900 text-white rounded-3xl text-xs font-black uppercase tracking-[0.3em] shadow-xl hover:bg-brand-blue transition-all">
-                  Відкрити на сайті
-                </button>
-              </div>
-           </div>
-
-           <div className="bg-slate-900 rounded-3xl p-6 space-y-4">
-              <div className="flex items-center gap-3">
-                 <div className="w-10 h-10 bg-brand-blue/20 rounded-xl flex items-center justify-center text-brand-blue"><Zap size={20} /></div>
-                 <div>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Smart Score</div>
-                    <div className="text-lg font-black text-white">85 / 100</div>
-                 </div>
-              </div>
-              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                <motion.div initial={{ width: 0 }} animate={{ width: '85%' }} className="h-full bg-brand-blue" />
+           <div className="p-8 space-y-4">
+              <h3 className="text-2xl font-black text-slate-900">{formData.make || 'Марка'} {formData.model || 'Модель'}</h3>
+              <div className="text-2xl font-black text-brand-blue">${Number(formData.price).toLocaleString()}</div>
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                 <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest"><Gauge size={14}/> {formData.mileage || '0'} KM</div>
+                 <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest"><Zap size={14}/> {formData.engine || '—'}</div>
               </div>
            </div>
         </div>
