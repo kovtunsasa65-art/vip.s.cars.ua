@@ -176,7 +176,7 @@ export default function App() {
             <Footer />
 
             {/* Floating Buttons Container */}
-            <div className="fixed bottom-20 md:bottom-6 right-6 z-[60] h-16 w-16 pointer-events-none">
+            <div className="fixed bottom-[74px] md:bottom-6 right-4 md:right-6 z-[60] h-16 w-16 pointer-events-none">
               <ScrollAnimatedButtons />
             </div>
           </div>
