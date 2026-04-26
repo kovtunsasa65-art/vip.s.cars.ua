@@ -11,7 +11,7 @@ import {
   Eye, TrendingUp, X, Search, ChevronRight, Zap, Settings,
   Image, ArrowUpRight, FileText, AlertTriangle, Download,
   MessageSquareText, Menu, User, Bell, CheckCircle2, ShieldCheck, Send, RefreshCw, MessageCircle, MapPin,
-  Star, ThumbsUp, ThumbsDown, Globe, BarChart2
+  Star, ThumbsUp, ThumbsDown, Globe, BarChart2, LogOut
 } from 'lucide-react';
 
 type Tab = 'dashboard' | 'cars' | 'leads' | 'users' | 'seo' | 'analytics' | 'ai' | 'content' | 'settings' | 'media';
@@ -1794,8 +1794,13 @@ export default function Admin() {
   const [profile, setProfile] = useState<any>(null);
   const [uSearch, setUSearch] = useState('');
   const [uResults, setUResults] = useState<{ cars: any[], leads: any[] }>({ cars: [], leads: [] });
-  const [isSearching, setIsSearching] = useState(false);
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -1902,6 +1907,13 @@ export default function Admin() {
           <div className={cn("flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-widest px-1", !isSidebarOpen && "justify-center")}>
             {isSidebarOpen ? <><span>v1.2.0</span><div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /></> : <span>v1.2</span>}
           </div>
+          <button 
+            onClick={handleLogout}
+            className={cn("w-full flex items-center gap-2 px-3 py-2 text-red-500/60 hover:text-red-500 transition-colors text-[10px] font-black uppercase tracking-widest", !isSidebarOpen && "justify-center")}
+          >
+            <LogOut size={14} />
+            {isSidebarOpen && <span>Вийти з системи</span>}
+          </button>
         </div>
       </aside>
 
@@ -1989,9 +2001,23 @@ export default function Admin() {
                 <button onClick={() => setTab('leads')} className="w-full py-3 bg-slate-50 text-[10px] font-black text-slate-400 uppercase hover:text-brand-blue transition-colors">Всі сповіщення</button>
               </div>
             </div>
-            <div className="flex items-center gap-3 pl-6 border-l border-slate-100 cursor-pointer">
-              <div className="text-right hidden sm:block"><div className="text-sm font-black text-slate-900 truncate max-w-[120px]">{profile?.name || 'Адмін'}</div><div className="text-[10px] text-brand-blue font-bold uppercase">{profile?.role || 'Manager'}</div></div>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-blue-600 flex items-center justify-center text-white shadow-lg shadow-brand-blue/20">{profile?.avatar_url ? <img src={profile.avatar_url} className="w-full h-full object-cover rounded-xl" alt="" /> : <User size={20} />}</div>
+            <div className="flex items-center gap-3 pl-6 border-l border-slate-100">
+              <div className="text-right hidden sm:block">
+                <div className="text-sm font-black text-slate-900 truncate max-w-[120px]">{profile?.name || 'Адмін'}</div>
+                <div className="text-[10px] text-brand-blue font-bold uppercase">{profile?.role || 'Manager'}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-blue-600 flex items-center justify-center text-white shadow-lg shadow-brand-blue/20">
+                  {profile?.avatar_url ? <img src={profile.avatar_url} className="w-full h-full object-cover rounded-xl" alt="" /> : <User size={20} />}
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                  title="Вийти"
+                >
+                  <LogOut size={20} />
+                </button>
+              </div>
             </div>
           </div>
         </header>
