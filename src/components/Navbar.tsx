@@ -122,15 +122,30 @@ export default function Navbar() {
               <User size={20} />
             </Link>
           ) : (
-            <Link
-              to="/login"
-              className="text-slate-500 font-bold text-sm hover:text-brand-blue transition-colors flex items-center gap-2"
-            >
-              <div className="p-2 bg-slate-50 rounded-full">
-                <User size={18} />
-              </div>
-              <span className="hidden xl:inline">Вхід</span>
-            </Link>
+            <>
+              <Link
+                to="/sell"
+                className="flex items-center gap-2 px-5 py-2.5 bg-brand-blue text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg shadow-brand-blue/20"
+              >
+                <Plus size={14} />
+                Продати авто
+              </Link>
+              <Link
+                to="/compare"
+                className="p-2.5 text-slate-400 hover:text-slate-900 transition-colors"
+              >
+                <BarChart3 size={20} />
+              </Link>
+              <Link
+                to="/login"
+                className="text-slate-500 font-bold text-sm hover:text-brand-blue transition-colors flex items-center gap-2"
+              >
+                <div className="p-2 bg-slate-50 rounded-full">
+                  <User size={18} />
+                </div>
+                <span className="hidden xl:inline">Вхід</span>
+              </Link>
+            </>
           )}
         </div>
 

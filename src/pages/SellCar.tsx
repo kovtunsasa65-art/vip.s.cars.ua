@@ -1,0 +1,100 @@
+import React, { useState } from 'react';
+import Header from '../components/Header';
+import Footer from '../components/Footer';
+import CarForm from './admin/CarForm';
+import { supabase } from '../lib/supabase';
+import { toast } from 'react-hot-toast';
+import { motion } from 'framer-motion';
+import { Sparkles, ShieldCheck, Zap } from 'lucide-react';
+
+export default function SellCar() {
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleClientSubmit = async (formData: any) => {
+    const toastId = toast.loading('Надсилаємо ваше оголошення на модерацію...');
+    
+    try {
+      const { error } = await supabase.from('cars').insert([{
+        ...formData,
+        status: 'moderation', // Завжди на модерацію
+        source: 'client_form',
+        created_at: new Date().toISOString()
+      }]);
+
+      if (error) throw error;
+
+      toast.success('Дякуємо! Ваше авто надіслано на перевірку.', { id: toastId });
+      setSubmitted(true);
+    } catch (error: any) {
+      toast.error('Помилка: ' + error.message, { id: toastId });
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-white">
+        <Header />
+        <main className="max-w-4xl mx-auto px-6 py-32 text-center">
+          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="space-y-8">
+            <div className="w-24 h-24 bg-green-100 text-green-600 rounded-[32px] flex items-center justify-center mx-auto shadow-xl shadow-green-100/50">
+               <ShieldCheck size={48} />
+            </div>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight">Оголошення надіслано!</h1>
+            <p className="text-slate-500 text-lg font-medium max-w-md mx-auto">Наші менеджери перевірять дані протягом 15 хвилин. Ви отримаєте сповіщення.</p>
+            <button onClick={() => window.location.href = '/'} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-brand-blue transition-all">На головну</button>
+          </motion.div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <Header />
+      
+      {/* Hero Section for Clients */}
+      <section className="bg-slate-900 pt-32 pb-20 px-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-brand-blue/20 blur-[120px] rounded-full" />
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-brand-blue/10 border border-brand-blue/20 rounded-full text-brand-blue text-[10px] font-black uppercase tracking-widest mb-6">
+              <Sparkles size={14} /> Продаж без турбот
+            </div>
+            <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter leading-none mb-6">
+              Продайте своє авто <br /> <span className="text-brand-blue">швидко та дорого</span>
+            </h1>
+            <p className="text-slate-400 text-lg font-medium">Заповніть форму за 2 хвилини — ми знайдемо покупця для вашого VIP авто.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* The Form Section */}
+      <main className="max-w-7xl mx-auto px-6 -mt-10 pb-32">
+         <div className="bg-white rounded-[48px] p-4 shadow-2xl shadow-slate-200/50 border border-slate-100">
+            <CarForm 
+              onSave={handleClientSubmit} 
+              onCancel={() => window.history.back()} 
+            />
+         </div>
+
+         {/* Trust Blocks */}
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20">
+            {[
+              { icon: <Zap className="text-amber-500" />, title: "Швидка оцінка", desc: "AI миттєво визначає ринкову вартість вашого авто" },
+              { icon: <ShieldCheck className="text-green-500" />, title: "Безпечна угода", desc: "Ми беремо на себе всі юридичні нюанси та перевірки" },
+              { icon: <Sparkles className="text-brand-blue" />, title: "Професійне SEO", desc: "Ваше оголошення побачать тисячі потенційних покупців" }
+            ].map((item, i) => (
+              <div key={i} className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm">
+                <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center mb-6">{item.icon}</div>
+                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mb-2">{item.title}</h3>
+                <p className="text-slate-500 text-sm font-medium leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+         </div>
+      </main>
+
+      <Footer />
+    </div>
+  );
+}

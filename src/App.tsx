@@ -27,6 +27,7 @@ import ToastContainer from './components/ToastContainer';
 const Admin           = lazy(() => import('./pages/Admin'));
 const Login           = lazy(() => import('./pages/Login'));
 const ClientDashboard = lazy(() => import('./pages/ClientDashboard'));
+const SellCar         = lazy(() => import('./pages/SellCar'));
 const CarDetails      = lazy(() => import('./pages/CarDetails'));
 const ComparePage     = lazy(() => import('./pages/ComparePage'));
 const FeedPage        = lazy(() => import('./pages/FeedPage'));
