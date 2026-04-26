@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { PHONE_TEL } from './lib/config';
 import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
