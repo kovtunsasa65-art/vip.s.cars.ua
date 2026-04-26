@@ -3,8 +3,10 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { motion } from 'framer-motion';
 import { Lock, Mail, Loader2, ArrowLeft } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 export default function Login() {
+// ... (rest of states)
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -97,7 +99,7 @@ export default function Login() {
             <div className="flex justify-between items-center pl-1">
               <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Пароль</label>
               {!isSignUp && (
-                <Link to="/forgot-password" size="sm" className="text-[10px] font-black text-brand-blue uppercase tracking-widest hover:underline">
+                <Link to="/forgot-password" className="text-[10px] font-black text-brand-blue uppercase tracking-widest hover:underline">
                   Забули?
                 </Link>
               )}
@@ -123,7 +125,7 @@ export default function Login() {
             type="button"
             onClick={async () => {
               const { error } = await supabase.auth.signInWithOAuth({ 
-                provider: 'telegram',
+                provider: 'telegram' as any,
                 options: { redirectTo: window.location.origin + '/dashboard' }
               });
               if (error) toast.error(error.message);

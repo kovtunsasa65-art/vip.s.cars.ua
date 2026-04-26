@@ -22,7 +22,7 @@ export default function Dashboard({
   stats = {}, 
   aiLogsCount = 0, 
   setTab = () => {} 
-}: DashboardProps): JSX.Element {
+}: DashboardProps) {
   
   const kpis = [
     { label: 'Відвідувачі', value: '347', trend: '+12%', up: true, icon: <Users size={20} /> },

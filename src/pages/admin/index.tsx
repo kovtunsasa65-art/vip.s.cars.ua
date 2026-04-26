@@ -59,7 +59,7 @@ export default function AdminIndex() {
     switch (activeTab) {
       case 'dashboard': return <Dashboard setTab={setActiveTab} leads={[]} cars={[]} stats={{}} aiLogsCount={47} />;
       case 'cars': return <CarsManager />;
-      case 'leads': return <LeadsManager />;
+      case 'leads': return <LeadsManager leads={[]} onRefresh={() => {}} profile={profile} />;
       case 'moderation': return <ModerationManager />;
       default: return (
         <div className="flex flex-col items-center justify-center h-[60vh] text-slate-300">

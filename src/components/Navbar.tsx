@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Phone, Menu, X, User, Search, Home, Heart, ArrowRight } from 'lucide-react';
+import { Phone, Menu, X, User, Search, Home, Heart, ArrowRight, Plus, BarChart3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';

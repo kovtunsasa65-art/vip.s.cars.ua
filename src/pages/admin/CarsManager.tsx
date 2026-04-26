@@ -3,7 +3,7 @@ import {
   Plus, Search, Filter, MoreHorizontal, 
   Edit3, Trash2, ExternalLink, RefreshCw, X,
   Download, Users, Tag, Sparkles, CheckSquare, Square,
-  Clock, ImageOff, ShieldAlert
+  Clock, ImageOff, ShieldAlert, Globe
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
