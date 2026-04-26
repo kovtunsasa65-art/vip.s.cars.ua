@@ -134,13 +134,14 @@ export default function ClientDashboard() {
           </div>
 
           {/* Таби */}
-          <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+          <div className="flex gap-2 mb-5 overflow-x-auto pb-2 no-scrollbar">
             {tabs.map(t => (
               <button key={t.id} onClick={() => setTab(t.id as Tab)}
-                className={cn('flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap border transition-all',
+                className={cn('flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] md:text-sm font-bold whitespace-nowrap border transition-all shrink-0',
                   tab === t.id ? 'bg-brand-blue text-white border-brand-blue shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-brand-blue')}>
-                {t.icon} {t.label}
-                {t.count > 0 && <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-black', tab === t.id ? 'bg-white/20' : 'bg-slate-100')}>{t.count}</span>}
+                <span className="opacity-70">{t.icon}</span>
+                <span>{t.label}</span>
+                {t.count > 0 && <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-black', tab === t.id ? 'bg-white/20' : 'bg-slate-100')}>{t.count}</span>}
               </button>
             ))}
           </div>
