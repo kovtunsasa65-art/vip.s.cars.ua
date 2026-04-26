@@ -5,7 +5,7 @@ import { toast } from '../lib/toast';
 import { PHONE_RAW } from '../lib/config';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   BarChart3, Car, Users, Phone, Plus, Trash2, Edit2,
   Eye, TrendingUp, X, Search, ChevronRight, Zap, Settings,
@@ -1786,15 +1786,24 @@ export default function Admin() {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { navigate('/login'); return; }
-    const { data: p } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+    const { data: p } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
     
-    // Дозволяємо вхід якщо є роль АБО якщо це email власника
-    const isOwner = session.user.email === 'kovtunsasa65@gmail.com';
+    // Дозволяємо вхід якщо є роль АБО якщо це email власника (регістр не має значення)
+    const userEmail = session.user.email?.toLowerCase() || '';
+    const isOwner = userEmail === 'kovtunsasa65@gmail.com' || userEmail === 'kovtunsasa@gmail.com';
+    
     if (!isOwner && (!p || !['manager', 'editor', 'admin'].includes(p.role))) { 
+      console.log('Access denied for:', userEmail);
       navigate('/'); 
       return; 
     }
-    setProfile(p || { name: 'Owner', role: 'admin' });
+    
+    // Якщо це власник але профілю немає, створюємо віртуальний профіль
+    setProfile(p || { 
+      name: session.user.user_metadata?.full_name || 'Owner', 
+      role: 'admin',
+      email: userEmail 
+    });
     const [{ data: l }, { data: c }, { data: s }, { count: ac }] = await Promise.all([
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
       supabase.from('cars').select('*, car_images(*)').order('created_at', { ascending: false }),
