@@ -1,4 +1,4 @@
-export type Tab = 'dashboard' | 'cars' | 'leads' | 'users' | 'seo' | 'analytics' | 'ai' | 'content' | 'settings' | 'media';
+export type Tab = 'dashboard' | 'cars' | 'moderation' | 'leads' | 'users' | 'seo' | 'analytics' | 'ai' | 'content' | 'settings' | 'media';
 
 export const LEAD_STATUSES = ['новий', 'в роботі', "зв'язались", 'закрито (виграш)', 'закрито (програш)'];
 export const LEAD_SCORES   = ['гарячий', 'теплий', 'холодний'];
