@@ -26,6 +26,17 @@ import { AvtopidbirPage, VykupPage, PerevirkaPage } from './pages/ServicePages';
 import ComparePage from './pages/ComparePage';
 import FeedPage from './pages/FeedPage';
 import NotFoundPage from './pages/NotFoundPage';
+import Favorites from './pages/Favorites';
+import BlogList from './pages/BlogList';
+import BlogPost from './pages/BlogPost';
+import SitemapHtml from './pages/SitemapHtml';
+import SitemapXml from './pages/SitemapXml';
+import Privacy from './pages/Privacy';
+import Cookie from './pages/Cookie';
+import Terms from './pages/Terms';
+import Oferta from './pages/Oferta';
+import ServerError from './pages/ServerError';
+import Maintenance from './pages/Maintenance';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function HomePage() {
@@ -77,6 +88,11 @@ export default function App() {
             <ClientDashboard />
           </ProtectedRoute>
         } />
+        <Route path="/cabinet/*" element={
+          <ProtectedRoute>
+            <ClientDashboard />
+          </ProtectedRoute>
+        } />
         <Route path="*" element={
           <div className="min-h-screen bg-white text-slate-900 selection:bg-brand-blue selection:text-white">
             <Navbar />
@@ -96,6 +112,17 @@ export default function App() {
                 <Route path="/perevirka"  element={<PerevirkaPage />} />
                 <Route path="/compare"    element={<ComparePage />} />
                 <Route path="/feed"       element={<FeedPage />} />
+                <Route path="/favorites"  element={<Favorites />} />
+                <Route path="/blog"       element={<BlogList />} />
+                <Route path="/blog/:slug" element={<BlogPost />} />
+                <Route path="/sitemap"    element={<SitemapHtml />} />
+                <Route path="/sitemap.xml" element={<SitemapXml />} />
+                <Route path="/privacy"    element={<Privacy />} />
+                <Route path="/cookie"     element={<Cookie />} />
+                <Route path="/terms"      element={<Terms />} />
+                <Route path="/oferta"     element={<Oferta />} />
+                <Route path="/500"        element={<ServerError />} />
+                <Route path="/maintenance" element={<Maintenance />} />
                 <Route path="*"           element={<NotFoundPage />} />
               </Routes>
             </AnimatePresence>

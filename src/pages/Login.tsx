@@ -29,7 +29,7 @@ export default function Login() {
           password,
         });
         if (error) throw error;
-        setMessage('Аккаунт створено! Тепер ви можете увійти, використовуючи свої дані.');
+        setMessage('Акаунт створено! Тепер ви можете увійти, використовуючи свої дані.');
         setIsSignUp(false);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -78,7 +78,7 @@ export default function Login() {
           <p className="text-xs font-black text-brand-blue uppercase tracking-widest pl-1 mb-2">{isSignUp ? 'Реєстрація' : 'Авторизація'}</p>
           <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-none">
             {isSignUp ? (
-              <>Створити <br/>аккаунт</>
+              <>Створити <br/>акаунт</>
             ) : (
               isAdminMode ? <>Вхід в <br/>панель</> : <>Вхід для <br/>клієнта</>
             )}
@@ -148,7 +148,7 @@ export default function Login() {
             }}
             className="w-full text-center text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-brand-blue transition-colors mt-6"
           >
-            {isSignUp ? 'Вже є аккаунт? Увійти' : 'Немає аккаунту? Реєстрація'}
+            {isSignUp ? 'Вже є акаунт? Увійти' : 'Немає акаунту? Реєстрація'}
           </button>
         </form>
 

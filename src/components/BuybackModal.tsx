@@ -25,11 +25,13 @@ export default function BuybackModal({ isOpen, onClose }: BuybackModalProps) {
   const [form, setForm] = useState({
     phone:        '',
     brand:        '',
+    model:        '',
     engineVolume: '',
     transmission: '',
     mileage:      '',
     year:         '',
     description:  '',
+    telegram:     '',
   });
 
   // Блокуємо скрол фону
@@ -43,7 +45,7 @@ export default function BuybackModal({ isOpen, onClose }: BuybackModalProps) {
     if (!isOpen) {
       setTimeout(() => {
         setStep(1);
-        setForm({ phone:'', brand:'', engineVolume:'', transmission:'', mileage:'', year:'', description:'' });
+        setForm({ phone:'', brand:'', model:'', engineVolume:'', transmission:'', mileage:'', year:'', description:'', telegram:'' });
         setImages([]);
         setPreviews([]);
       }, 300);
@@ -78,14 +80,19 @@ export default function BuybackModal({ isOpen, onClose }: BuybackModalProps) {
       // Зберігаємо в leads
       await supabase.from('leads').insert([{
         type:    'викуп',
-        name:    `Викуп: ${form.brand || 'авто'}`,
+        name:    `Викуп: ${form.brand} ${form.model}`,
         phone:   form.phone,
+        telegram: form.telegram,
+        car_brand: form.brand,
+        car_model: form.model,
         message: [
           form.brand        && `Марка: ${form.brand}`,
+          form.model        && `Модель: ${form.model}`,
           form.year         && `Рік: ${form.year}`,
           form.engineVolume && `Об'єм: ${form.engineVolume}л`,
           form.transmission && `КПП: ${form.transmission}`,
           form.mileage      && `Пробіг: ${form.mileage} тис.км`,
+          form.telegram     && `Telegram: @${form.telegram.replace('@', '')}`,
           form.description  && `Опис: ${form.description}`,
         ].filter(Boolean).join('\n'),
         source:  'сайт / форма викупу',
@@ -98,7 +105,9 @@ export default function BuybackModal({ isOpen, onClose }: BuybackModalProps) {
         '<b>💰 ЗАЯВКА НА ВИКУП АВТО!</b>',
         '───────────────────',
         `📞 <b>Тел:</b> <a href="tel:${form.phone}">${form.phone}</a>`,
+        form.telegram     && `✈️ <b>Telegram:</b> @${form.telegram.replace('@', '')}`,
         form.brand        && `🚗 <b>Марка:</b> ${form.brand}`,
+        form.model        && `🚙 <b>Модель:</b> ${form.model}`,
         form.year         && `📅 <b>Рік:</b> ${form.year}`,
         form.engineVolume && `⚙️ <b>Об'єм:</b> ${form.engineVolume} л`,
         form.transmission && `🔧 <b>КПП:</b> ${form.transmission}`,
@@ -179,22 +188,39 @@ export default function BuybackModal({ isOpen, onClose }: BuybackModalProps) {
                       placeholder="+380" className={inputClass} />
                   </div>
 
+                  <div>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-1.5">
+                      Логін Telegram (необов'язково)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">@</span>
+                      <input type="text" value={form.telegram} onChange={set('telegram')}
+                        placeholder="username" className={cn(inputClass, "pl-9")} />
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-1.5">
                         <Car size={11} className="inline mr-1" />Марка *
                       </label>
                       <select required value={form.brand} onChange={set('brand')} className={cn(inputClass, 'appearance-none')}>
-                        <option value="">Оберіть</option>
+                        <option value="">Марка</option>
                         {BRANDS.map(b => <option key={b}>{b}</option>)}
                       </select>
                     </div>
+                    <div>
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-1.5">Модель *</label>
+                      <input required type="text" value={form.model} onChange={set('model')}
+                        placeholder="Напр: X5" className={inputClass} />
+                    </div>
+                  </div>
                     <div>
                       <label className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-1.5">Рік</label>
                       <input type="number" value={form.year} onChange={set('year')}
                         placeholder="2018" min="1990" max="2025" className={inputClass} />
                     </div>
-                  </div>
+                  
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>

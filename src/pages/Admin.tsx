@@ -265,6 +265,9 @@ function LeadsManager({ leads, onRefresh }: { leads: any[]; onRefresh: () => voi
             <div className="space-y-2 text-sm">
               <Row label="Ім'я"    value={selected.name} />
               <Row label="Тел"     value={<a href={`tel:${selected.phone}`} className="text-brand-blue font-bold">{selected.phone}</a>} />
+              {selected.telegram && (
+                <Row label="Telegram" value={<a href={`https://t.me/${selected.telegram.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-blue-500 font-bold">@{selected.telegram.replace('@', '')}</a>} />
+              )}
               <Row label="Тип"     value={selected.type} />
               <Row label="Бюджет"  value={selected.budget ?? '—'} />
               <Row label="Джерело" value={selected.source ?? '—'} />
@@ -298,7 +301,7 @@ function LeadsManager({ leads, onRefresh }: { leads: any[]; onRefresh: () => voi
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-green-500 text-white rounded-lg text-xs font-bold hover:bg-green-600 transition-colors">
                 <Phone size={13}/> Дзвінок
               </a>
-              <a href={`https://t.me/${selected.phone?.replace('+', '')}`} target="_blank" rel="noreferrer"
+              <a href={selected.telegram ? `https://t.me/${selected.telegram.replace('@', '')}` : `https://t.me/${selected.phone?.replace('+', '')}`} target="_blank" rel="noreferrer"
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors">
                 <MessageCircle size={13}/> Telegram
               </a>
