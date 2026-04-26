@@ -1806,13 +1806,9 @@ export default function Admin() {
     const userEmail = session.user.email?.toLowerCase() || '';
     const isOwner = userEmail === 'kovtunsasa65@gmail.com' || userEmail === 'kovtunsasa@gmail.com';
     
-    console.log('DEBUG AUTH:', { userEmail, isOwner, profile: p });
-
-    // ТИМЧАСОВО ВИМИКАЄМО РЕДІРЕКТ ДЛЯ ДІАГНОСТИКИ
     if (!isOwner && (!p || !['manager', 'editor', 'admin'].includes(p.role))) { 
-      console.warn('Access would be denied here, but we are in DEBUG mode.');
-      // navigate('/'); 
-      // return; 
+      navigate('/'); 
+      return; 
     }
     
     setProfile(p || { 
