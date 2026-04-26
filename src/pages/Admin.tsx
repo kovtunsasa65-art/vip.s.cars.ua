@@ -1787,8 +1787,14 @@ export default function Admin() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { navigate('/login'); return; }
     const { data: p } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-    if (!p || !['manager', 'editor', 'admin'].includes(p.role)) { navigate('/'); return; }
-    setProfile(p);
+    
+    // Дозволяємо вхід якщо є роль АБО якщо це email власника
+    const isOwner = session.user.email === 'kovtunsasa65@gmail.com';
+    if (!isOwner && (!p || !['manager', 'editor', 'admin'].includes(p.role))) { 
+      navigate('/'); 
+      return; 
+    }
+    setProfile(p || { name: 'Owner', role: 'admin' });
     const [{ data: l }, { data: c }, { data: s }, { count: ac }] = await Promise.all([
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
       supabase.from('cars').select('*, car_images(*)').order('created_at', { ascending: false }),

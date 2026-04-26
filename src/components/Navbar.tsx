@@ -154,12 +154,20 @@ export default function Navbar() {
               <Link
                 key={link.name}
                 to={link.href}
-                className="text-xl font-bold text-slate-900 hover:text-brand-blue"
+                className="text-xl font-bold text-slate-900 hover:text-brand-blue border-b border-slate-50 pb-4"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 {link.name}
               </Link>
             ))}
+            <Link
+              to={user ? (user.email === 'kovtunsasa65@gmail.com' ? '/admin' : '/dashboard') : '/login'}
+              className="mt-4 flex items-center justify-center gap-3 bg-brand-blue text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-brand-blue/20"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              <User size={20} />
+              {user ? 'Мій кабінет' : 'Увійти в кабінет'}
+            </Link>
           </motion.div>
         )}
       </AnimatePresence>
@@ -178,10 +186,13 @@ export default function Navbar() {
           <Heart size={20} />
           <span className="text-xs">Обране</span>
         </Link>
-        <a href={`tel:${PHONE_RAW}`} className="flex flex-col items-center text-slate-600 hover:text-brand-blue">
-          <Phone size={20} />
-          <span className="text-xs">Дзвінок</span>
-        </a>
+        <Link 
+          to={user ? (user.email === 'kovtunsasa65@gmail.com' ? '/admin' : '/dashboard') : '/login'} 
+          className={cn("flex flex-col items-center text-slate-600 hover:text-brand-blue", (location.pathname === '/login' || location.pathname === '/dashboard' || location.pathname === '/admin') && "text-brand-blue")}
+        >
+          <User size={20} />
+          <span className="text-xs">{user ? 'Кабінет' : 'Вхід'}</span>
+        </Link>
         <button onClick={() => setIsMobileMenuOpen(true)} className="flex flex-col items-center text-slate-600 hover:text-brand-blue">
           <Menu size={20} />
           <span className="text-xs">Меню</span>
