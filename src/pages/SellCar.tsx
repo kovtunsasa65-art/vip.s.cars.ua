@@ -1,32 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import CarForm from './admin/CarForm';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { motion } from 'framer-motion';
-import { Sparkles, ShieldCheck, Zap } from 'lucide-react';
+import { Sparkles, ShieldCheck, Zap, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function SellCar() {
   const [submitted, setSubmitted] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+  }, []);
 
   const handleClientSubmit = async (formData: any) => {
-    const toastId = toast.loading('Надсилаємо ваше оголошення на модерацію...');
+    // 1. Перевірка авторизації
+    if (!user) {
+      toast.error('Будь ласка, увійдіть в акаунт, щоб додати авто');
+      navigate('/login');
+      return;
+    }
+
+    const toastId = toast.loading('Зберігаємо ваше оголошення...');
     
     try {
-      const { error } = await supabase.from('cars').insert([{
-        ...formData,
-        status: 'moderation', // Завжди на модерацію
+      // 2. Підготовка чистих даних для бази (тільки ті поля, що є в таблиці)
+      const carData = {
+        user_id: user.id,
+        make: formData.make,
+        model: formData.model,
+        year: formData.year,
+        price: Number(formData.price),
+        engine: formData.engine,
+        transmission: formData.transmission,
+        mileage: Number(formData.mileage),
+        fuel: formData.fuel,
+        images: formData.images,
+        description: formData.description,
+        status: 'moderation', // Завжди на модерацію для клієнтів
         source: 'client_form',
+        updated_at: new Date().toISOString(),
         created_at: new Date().toISOString()
-      }]);
+      };
 
-      if (error) throw error;
+      const { error, data } = await supabase
+        .from('cars')
+        .insert([carData])
+        .select();
 
-      toast.success('Дякуємо! Ваше авто надіслано на перевірку.', { id: toastId });
+      if (error) {
+        console.error('Supabase Error:', error);
+        throw new Error(error.message);
+      }
+
+      toast.success('Оголошення успішно створено!', { id: toastId });
       setSubmitted(true);
     } catch (error: any) {
-      toast.error('Помилка: ' + error.message, { id: toastId });
+      console.error('Submission failed:', error);
+      toast.error(`Не вдалося зберегти: ${error.message}`, { id: toastId });
     }
   };
 
@@ -41,7 +78,7 @@ export default function SellCar() {
             </div>
             <h1 className="text-4xl font-black text-slate-900 tracking-tight">Оголошення надіслано!</h1>
             <p className="text-slate-500 text-lg font-medium max-w-md mx-auto">Наші менеджери перевірять дані протягом 15 хвилин. Ви отримаєте сповіщення.</p>
-            <button onClick={() => window.location.href = '/'} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-brand-blue transition-all">На головну</button>
+            <button onClick={() => navigate('/dashboard')} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-brand-blue transition-all">В мій кабінет</button>
           </motion.div>
         </main>
         <Footer />
@@ -53,7 +90,6 @@ export default function SellCar() {
     <div className="min-h-screen bg-slate-50">
       <Navbar />
       
-      {/* Hero Section for Clients */}
       <section className="bg-slate-900 pt-32 pb-20 px-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-brand-blue/20 blur-[120px] rounded-full" />
         <div className="max-w-7xl mx-auto relative z-10">
@@ -69,16 +105,14 @@ export default function SellCar() {
         </div>
       </section>
 
-      {/* The Form Section */}
       <main className="max-w-7xl mx-auto px-6 -mt-10 pb-32">
          <div className="bg-white rounded-[48px] p-4 shadow-2xl shadow-slate-200/50 border border-slate-100">
             <CarForm 
               onSave={handleClientSubmit} 
-              onCancel={() => window.history.back()} 
+              onCancel={() => navigate(-1)} 
             />
          </div>
 
-         {/* Trust Blocks */}
          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20">
             {[
               { icon: <Zap className="text-amber-500" />, title: "Швидка оцінка", desc: "AI миттєво визначає ринкову вартість вашого авто" },
