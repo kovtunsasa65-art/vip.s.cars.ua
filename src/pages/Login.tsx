@@ -29,7 +29,7 @@ export default function Login() {
           password,
         });
         if (error) throw error;
-        setMessage('Реєстрація успішна! Перевірте пошту для підтвердження (якщо активовано) або спробуйте увійти.');
+        setMessage('Аккаунт створено! Тепер ви можете увійти, використовуючи свої дані.');
         setIsSignUp(false);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
