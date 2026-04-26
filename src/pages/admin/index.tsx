@@ -93,7 +93,7 @@ export default function AdminPanel() {
       case 'moderation': return <ModerationManager />;
       case 'seo':        return <SeoManager />;
       case 'ai':         return <AiManager />;
-      case 'analytics':  return <AnalyticsManager />;
+      case 'analytics':  return <AnalyticsManager cars={[]} leads={stats.activeLeads} />;
       case 'users':      return <UsersManager />;
       case 'content':    return <ContentManager />;
       case 'settings':   return <SettingsPanel />;
