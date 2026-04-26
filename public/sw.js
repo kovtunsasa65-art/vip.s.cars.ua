@@ -1,5 +1,5 @@
-const CACHE_NAME = 'vips-cars-cache-v3';
-const DATA_CACHE_NAME = 'vips-cars-data-cache-v3';
+const CACHE_NAME = 'vips-cars-cache-v5';
+const DATA_CACHE_NAME = 'vips-cars-data-cache-v5';
 
 const STATIC_ASSETS = [
   '/',

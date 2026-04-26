@@ -407,7 +407,7 @@ async function startServer() {
 
   // ── AI: покращити описи ───────────────────────────────────
   app.post("/api/ai/improve-description", async (req, res) => {
-    const { cars: carList } = req.body as { cars: { id: number; brand: string; model: string; year: number; description?: string }[] };
+    const { cars: carList, save = true } = req.body as { cars: { id: number; brand: string; model: string; year: number; description?: string }[]; save?: boolean };
     if (!Array.isArray(carList) || carList.length === 0)
       return res.status(400).json({ error: "cars[] required" });
     if (carList.length > 20)
@@ -430,10 +430,12 @@ async function startServer() {
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    for (const { id, description } of results) {
-      if (description) await sb.from("cars").update({ description }).eq("id", id);
+    if (save) {
+      for (const { id, description } of results) {
+        if (description && id) await sb.from("cars").update({ description }).eq("id", id);
+      }
     }
-    res.json({ success: true, updated: results.length });
+    res.json({ success: true, updated: save ? results.length : 0, results });
   });
 
   // ── AI: згенерувати SEO ───────────────────────────────────

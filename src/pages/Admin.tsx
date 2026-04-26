@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
+import CarCard from '../components/CarCard';
 import { PHONE_RAW } from '../lib/config';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -16,16 +17,28 @@ import {
 
 type Tab = 'dashboard' | 'cars' | 'leads' | 'users' | 'seo' | 'analytics' | 'ai' | 'content' | 'settings' | 'media';
 
-const LEAD_STATUSES = ['новий', 'в роботі', 'закрито'];
+const LEAD_STATUSES = ['новий', 'в роботі', "зв'язались", 'закрито (виграш)', 'закрито (програш)'];
+const LEAD_SCORES   = ['гарячий', 'теплий', 'холодний'];
+
+const KANBAN_COLS = [
+  { key: 'новий',               label: 'Нові',               colBg: 'bg-blue-50',   border: 'border-blue-200',  dot: 'bg-blue-400'   },
+  { key: 'в роботі',           label: 'В роботі',           colBg: 'bg-yellow-50', border: 'border-yellow-200',dot: 'bg-yellow-400' },
+  { key: "зв'язались",        label: "Зв'язались",        colBg: 'bg-purple-50', border: 'border-purple-200',dot: 'bg-purple-400' },
+  { key: 'закрито (виграш)',   label: 'Закрито (виграш)',   colBg: 'bg-green-50',  border: 'border-green-200', dot: 'bg-green-500'  },
+  { key: 'закрито (програш)',  label: 'Закрито (програш)', colBg: 'bg-red-50',    border: 'border-red-200',   dot: 'bg-red-400'    },
+];
+
 const SCORE_COLOR: Record<string, string> = {
-  гарячий: 'bg-red-100 text-red-700 border-red-200',
-  теплий: 'bg-orange-100 text-orange-700 border-orange-200',
+  гарячий:  'bg-red-100 text-red-700 border-red-200',
+  теплий:   'bg-orange-100 text-orange-700 border-orange-200',
   холодний: 'bg-slate-100 text-slate-500 border-slate-200',
 };
 const STATUS_LABELS: Record<string, string> = {
-  'новий': 'Нові',
-  'в роботі': 'В роботі',
-  'закрито': 'Закрито',
+  'новий':              'Нові',
+  'в роботі':           'В роботі',
+  "зв'язались":        "Зв'язались",
+  'закрито (виграш)':  'Закрито (виграш)',
+  'закрито (програш)': 'Закрито (програш)',
 };
 
 // ─── UI Helpers ──────────────────────────────────────────────
@@ -159,145 +172,280 @@ function Dashboard({ leads, cars, stats, aiLogsCount, setTab }: { leads: any[]; 
 }
 
 // ─── CRM (Leads) ─────────────────────────────────────────────
-function LeadsManager({ leads, onRefresh }: { leads: any[]; onRefresh: () => void }) {
-  const [selected, setSelected] = useState<any>(null);
-  const [history, setHistory] = useState<any[]>([]);
-  const [noteText, setNoteText] = useState('');
+function LeadsManager({ leads, onRefresh, profile }: { leads: any[]; onRefresh: () => void; profile?: any }) {
+  const [selected,       setSelected]       = useState<any>(null);
+  const [history,        setHistory]        = useState<any[]>([]);
+  const [noteText,       setNoteText]       = useState('');
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [dragLeadId,     setDragLeadId]     = useState<number | null>(null);
+  const [filter, setFilter] = useState({ search: '', score: '', type: '', source: '' });
 
   useEffect(() => {
-    if (selected) {
-      setLoadingHistory(true);
-      supabase.from('lead_history').select('*').eq('lead_id', selected.id).order('created_at', { ascending: false })
-        .then(({ data }) => {
-          setHistory(data || []);
-          setLoadingHistory(false);
-        });
-    }
-  }, [selected]);
+    if (!selected) return;
+    setLoadingHistory(true);
+    supabase.from('lead_history').select('*').eq('lead_id', selected.id).order('created_at', { ascending: true })
+      .then(({ data }) => { setHistory(data ?? []); setLoadingHistory(false); });
+  }, [selected?.id]);
 
   const updateLead = async (id: number, patch: any) => {
     const old = leads.find(l => l.id === id);
     await supabase.from('leads').update(patch).eq('id', id);
-
-    if (patch.status && patch.status !== old?.status) {
-      await supabase.from('lead_history').insert([{
-        lead_id: id,
-        action: 'status_change',
-        from_value: old?.status,
-        to_value: patch.status,
-        comment: `Статус змінено на ${patch.status}`
-      }]);
-    }
-
+    const events: any[] = [];
+    if (patch.status && patch.status !== old?.status)
+      events.push({ lead_id: id, action: 'status_change', from_value: old?.status, to_value: patch.status, comment: `${old?.status} → ${patch.status}` });
+    if (patch.score && patch.score !== old?.score)
+      events.push({ lead_id: id, action: 'score_change', from_value: old?.score, to_value: patch.score, comment: `Score: ${old?.score} → ${patch.score}` });
+    if (events.length) await supabase.from('lead_history').insert(events);
     onRefresh();
     if (selected?.id === id) {
-      setSelected((prev: any) => ({ ...prev, ...patch }));
-      const { data } = await supabase.from('lead_history').select('*').eq('lead_id', id).order('created_at', { ascending: false });
-      setHistory(data || []);
+      setSelected((p: any) => ({ ...p, ...patch }));
+      const { data } = await supabase.from('lead_history').select('*').eq('lead_id', id).order('created_at', { ascending: true });
+      setHistory(data ?? []);
     }
   };
 
   const addNote = async () => {
     if (!noteText.trim() || !selected) return;
-    await supabase.from('lead_history').insert([{
-      lead_id: selected.id,
-      action: 'note',
-      comment: noteText
-    }]);
+    await supabase.from('lead_history').insert([{ lead_id: selected.id, action: 'note', comment: noteText }]);
     setNoteText('');
-    const { data } = await supabase.from('lead_history').select('*').eq('lead_id', selected.id).order('created_at', { ascending: false });
-    setHistory(data || []);
+    const { data } = await supabase.from('lead_history').select('*').eq('lead_id', selected.id).order('created_at', { ascending: true });
+    setHistory(data ?? []);
   };
 
+  const assignToMe = async () => {
+    if (!selected || !profile?.id) return;
+    await updateLead(selected.id, { manager_id: profile.id });
+    toast.success('Призначено вам');
+  };
+
+  const slaBreached = (l: any) =>
+    l.status === 'новий' && Date.now() - new Date(l.created_at).getTime() > 15 * 60 * 1000;
+
+  const filtered = leads.filter(l => {
+    if (filter.search && !l.name?.toLowerCase().includes(filter.search.toLowerCase()) && !l.phone?.includes(filter.search)) return false;
+    if (filter.score  && l.score  !== filter.score)  return false;
+    if (filter.type   && l.type   !== filter.type)   return false;
+    if (filter.source && l.source !== filter.source) return false;
+    return true;
+  });
+
+  const types   = [...new Set(leads.map(l => l.type).filter(Boolean))] as string[];
+  const sources = [...new Set(leads.map(l => l.source).filter(Boolean))] as string[];
+
   return (
-    <div className="flex gap-6 h-full min-h-[600px]">
-      <div className="flex-1 space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-black text-slate-900">CRM / Заявки</h1>
-          <button onClick={onRefresh} className="p-2 text-slate-400 hover:text-brand-blue"><RefreshCw size={18} /></button>
+    <div className="flex gap-4 h-full min-h-[600px]">
+      {/* ── Kanban ─────────────────────────────────────────── */}
+      <div className="flex-1 min-w-0 space-y-4">
+        {/* Toolbar */}
+        <div className="flex items-center gap-3 flex-wrap shrink-0">
+          <h1 className="text-xl font-black text-slate-900 mr-2">CRM / Ліди</h1>
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={filter.search} onChange={e => setFilter(f => ({ ...f, search: e.target.value }))}
+              placeholder="Ім'я або телефон..."
+              className="pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:border-brand-blue focus:outline-none w-44" />
+          </div>
+          <select value={filter.score} onChange={e => setFilter(f => ({ ...f, score: e.target.value }))}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none">
+            <option value="">Score: всі</option>
+            {LEAD_SCORES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={filter.type} onChange={e => setFilter(f => ({ ...f, type: e.target.value }))}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none">
+            <option value="">Тип: всі</option>
+            {types.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select value={filter.source} onChange={e => setFilter(f => ({ ...f, source: e.target.value }))}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none">
+            <option value="">Джерело: всі</option>
+            {sources.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-slate-400 font-semibold">{filtered.length} лідів</span>
+            <button onClick={onRefresh} className="p-2 text-slate-400 hover:text-brand-blue transition-colors"><RefreshCw size={15} /></button>
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {['новий', 'в роботі', 'закрито'].map(status => (
-            <div key={status} className="bg-slate-50/50 rounded-2xl border border-slate-200 p-4 min-h-[500px]">
-              <div className="flex items-center justify-between mb-4 px-2">
-                <h3 className="font-black text-xs uppercase tracking-widest text-slate-400">{status}</h3>
-                <span className="bg-white text-[10px] font-black px-2 py-0.5 rounded-full border border-slate-200">{leads.filter(l => (l.status || 'новий') === status).length}</span>
-              </div>
-              <div className="space-y-3">
-                {leads.filter(l => (l.status || 'новий') === status).map(l => (
-                  <div key={l.id} onClick={() => setSelected(l)} className={cn("bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-brand-blue transition-all group", selected?.id === l.id && "ring-2 ring-brand-blue border-transparent")}>
-                    <div className="flex justify-between items-start mb-2">
-                      <span className={cn('text-[9px] font-black px-2 py-0.5 rounded-full border uppercase', SCORE_COLOR[l.score] || 'bg-slate-100')}>{l.score}</span>
-                      <span className="text-[9px] text-slate-300 font-bold">{l.created_at ? format(new Date(l.created_at), 'dd.MM') : ''}</span>
-                    </div>
-                    <div className="font-black text-slate-900 text-sm">{l.name}</div>
-                    <div className="text-[10px] text-slate-400 font-bold mt-1">{l.phone}</div>
+
+        {/* Board — horizontal scroll */}
+        <div className="flex gap-3 overflow-x-auto pb-4">
+          {KANBAN_COLS.map(col => {
+            const colLeads = filtered.filter(l => (l.status || 'новий') === col.key);
+            return (
+              <div key={col.key}
+                onDragOver={e => e.preventDefault()}
+                onDrop={() => { if (dragLeadId !== null) { updateLead(dragLeadId, { status: col.key }); setDragLeadId(null); } }}
+                className={cn('w-64 shrink-0 flex flex-col rounded-2xl border overflow-hidden', col.colBg, col.border)}>
+                {/* Column header */}
+                <div className="px-4 py-3 border-b border-current/10 flex items-center justify-between bg-white/50">
+                  <div className="flex items-center gap-2">
+                    <div className={cn('w-2 h-2 rounded-full', col.dot)} />
+                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">{col.label}</span>
                   </div>
-                ))}
+                  <span className="text-[10px] font-black bg-white/80 px-2 py-0.5 rounded-full border border-white">{colLeads.length}</span>
+                </div>
+
+                {/* Cards */}
+                <div className="p-2.5 flex-1 space-y-2 overflow-y-auto max-h-[calc(100vh-260px)]">
+                  {colLeads.map(l => {
+                    const sla = slaBreached(l);
+                    return (
+                      <div key={l.id}
+                        draggable
+                        onDragStart={() => setDragLeadId(l.id)}
+                        onClick={() => setSelected(l)}
+                        className={cn(
+                          'bg-white p-3 rounded-xl border shadow-sm cursor-pointer select-none transition-all hover:shadow-md hover:border-brand-blue',
+                          selected?.id === l.id ? 'ring-2 ring-brand-blue border-transparent' : 'border-slate-200',
+                          sla && 'border-red-300 bg-red-50/60',
+                          dragLeadId === l.id && 'opacity-50'
+                        )}>
+                        <div className="flex justify-between items-start mb-2">
+                          <span className={cn('text-[9px] font-black px-1.5 py-0.5 rounded-full border uppercase', SCORE_COLOR[l.score] ?? 'bg-slate-100 text-slate-400 border-slate-200')}>
+                            {l.score || '—'}
+                          </span>
+                          <span className="text-[9px] text-slate-400">{l.created_at ? format(new Date(l.created_at), 'dd.MM HH:mm') : ''}</span>
+                        </div>
+                        <div className="font-black text-slate-900 text-sm leading-tight truncate">{l.name}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{l.phone}</div>
+                        {l.budget && <div className="text-[10px] text-slate-400 mt-1">💰 {l.budget}</div>}
+                        {l.type   && <div className="text-[10px] text-brand-blue font-semibold mt-0.5">{l.type}</div>}
+                        {sla && (
+                          <div className="mt-2 text-[9px] bg-red-100 text-red-600 font-black px-2 py-0.5 rounded-full w-fit">
+                            ⚠ SLA &gt;15хв
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {colLeads.length === 0 && (
+                    <div className="h-14 border-2 border-dashed border-current/20 rounded-xl flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Перетягніть
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
+
+      {/* ── Lead detail panel ──────────────────────────────── */}
       {selected && (
-        <aside className="w-[350px] bg-white rounded-2xl border border-slate-200 p-6 shadow-xl sticky top-0 self-start max-h-[calc(100vh-120px)] overflow-y-auto custom-scrollbar z-10">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="font-black text-slate-900">Деталі ліда</h2>
-            <button onClick={() => setSelected(null)} className="p-1 hover:bg-slate-50 rounded-lg"><X size={18} /></button>
+        <aside className="w-[360px] shrink-0 bg-white rounded-2xl border border-slate-200 shadow-xl self-start sticky top-24 max-h-[calc(100vh-130px)] flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+            <div>
+              <h2 className="font-black text-slate-900 text-sm">Лід #{selected.id}</h2>
+              <div className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                {selected.created_at ? format(new Date(selected.created_at), 'dd MMM yyyy, HH:mm') : ''}
+              </div>
+            </div>
+            <button onClick={() => setSelected(null)} className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400"><X size={16} /></button>
           </div>
-          <div className="space-y-6">
-            <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
-              <Row label="Клієнт" value={selected.name} />
-              <Row label="Телефон" value={
-                <div className="flex items-center gap-2">
-                  <a href={`tel:${selected.phone}`} className="text-brand-blue">{selected.phone}</a>
-                  <a href={`https://t.me/${selected.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="p-1.5 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100 transition-colors">
-                    <Send size={12} />
+
+          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+            {/* Name + action buttons */}
+            <div className="space-y-3">
+              <div className="text-lg font-black text-slate-900 leading-tight">{selected.name}</div>
+              <div className="flex flex-wrap gap-2">
+                <a href={`tel:${selected.phone}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-bold hover:bg-green-600 transition-colors">
+                  <Phone size={12} /> Дзвінок
+                </a>
+                <a href={`https://t.me/+${selected.phone?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors">
+                  <Send size={12} /> Telegram
+                </a>
+                {selected.email && (
+                  <a href={`mailto:${selected.email}`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors">
+                    <MessageCircle size={12} /> Email
                   </a>
-                </div>
-              } />
-              <Row label="Тип запиту" value={<span className="capitalize">{selected.type}</span>} />
-              <Row label="Бюджет" value={selected.budget || '—'} />
-              {selected.message && <div className="mt-2 text-xs text-slate-600 italic border-t border-slate-100 pt-2">{selected.message}</div>}
+                )}
+                <button onClick={assignToMe}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue/10 text-brand-blue rounded-lg text-xs font-bold hover:bg-brand-blue hover:text-white transition-colors">
+                  <User size={12} /> Мені
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Змінити статус</label>
-              <div className="flex flex-wrap gap-2">
-                {LEAD_STATUSES.map(s => (
-                  <button key={s} onClick={() => updateLead(selected.id, { status: s })}
-                    className={cn("px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all", (selected.status || 'новий') === s ? "bg-brand-blue text-white border-brand-blue" : "bg-white text-slate-400 border-slate-100 hover:border-slate-200")}>
+            {/* SLA warning */}
+            {slaBreached(selected) && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-600 font-bold flex items-center gap-2">
+                ⚠ SLA порушено — відповідь не надіслана більше 15 хвилин
+              </div>
+            )}
+
+            {/* Info */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-2.5 text-sm">
+              <Row label="Телефон"      value={selected.phone} />
+              <Row label="Тип"          value={selected.type} />
+              <Row label="Бюджет"       value={selected.budget || '—'} />
+              <Row label="Джерело"      value={selected.source || '—'} />
+              {selected.car_id && <Row label="Авто"     value={`ID: ${selected.car_id}`} />}
+              {selected.message && <Row label="Повідомлення" value={selected.message} />}
+            </div>
+
+            {/* Score */}
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Score</label>
+              <div className="flex gap-2">
+                {LEAD_SCORES.map(s => (
+                  <button key={s} onClick={() => updateLead(selected.id, { score: s })}
+                    className={cn('flex-1 py-2 rounded-xl text-[10px] font-black uppercase border transition-all',
+                      SCORE_COLOR[s] ?? '',
+                      (selected.score || 'холодний') === s ? 'ring-2 ring-offset-1 ring-current opacity-100' : 'opacity-50 hover:opacity-80')}>
                     {s}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="space-y-4">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block flex items-center gap-2"><FileText size={12} /> Історія та нотатки</label>
-              <div className="space-y-4 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-50">
-                <div className="pl-6">
-                  <textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Додати коментар..." className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-brand-blue/10 h-20 resize-none" />
-                  <button onClick={addNote} disabled={!noteText.trim()} className="w-full mt-2 py-2 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50">Зберегти</button>
-                </div>
+            {/* Status */}
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Статус / Колонка</label>
+              <select value={selected.status || 'новий'} onChange={e => updateLead(selected.id, { status: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-brand-blue focus:outline-none">
+                {KANBAN_COLS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+            </div>
 
-                {history.map((h, i) => (
-                  <div key={h.id} className="pl-6 relative">
-                    <div className={cn("absolute left-[5px] top-1 w-2 h-2 rounded-full ring-4 ring-white", h.action === 'status_change' ? 'bg-orange-500' : 'bg-brand-blue')} />
-                    <div className="text-[9px] text-slate-400 font-bold mb-1">{format(new Date(h.created_at), 'dd MMM, HH:mm')}</div>
-                    <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                      {h.action === 'status_change' ? (
-                        <div className="flex items-center gap-1">
-                          <span className="font-bold opacity-50">{h.from_value}</span>
-                          <ChevronRight size={10} />
+            {/* Add note */}
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Додати нотатку</label>
+              <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={3}
+                placeholder="Коментар, результат дзвінка..."
+                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-brand-blue/10 resize-none" />
+              <button onClick={addNote} disabled={!noteText.trim()}
+                className="w-full mt-2 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40 hover:bg-slate-800 transition-colors">
+                Зберегти
+              </button>
+            </div>
+
+            {/* Timeline */}
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Часова лінія</label>
+              {loadingHistory && <div className="text-center text-xs text-slate-300 animate-pulse py-2">Завантаження...</div>}
+              <div className="space-y-3 relative before:absolute before:left-3 before:top-0 before:bottom-0 before:w-0.5 before:bg-slate-100">
+                {history.map(h => (
+                  <div key={h.id} className="pl-8 relative">
+                    <div className={cn('absolute left-[9px] top-1.5 w-2.5 h-2.5 rounded-full ring-2 ring-white',
+                      h.action === 'status_change' ? 'bg-orange-400' : h.action === 'score_change' ? 'bg-purple-400' : 'bg-brand-blue')} />
+                    <div className="text-[9px] text-slate-400 font-semibold mb-0.5">{format(new Date(h.created_at), 'dd MMM, HH:mm')}</div>
+                    <div className="text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 leading-relaxed">
+                      {(h.action === 'status_change' || h.action === 'score_change') ? (
+                        <div className="flex items-center gap-1.5 font-medium">
+                          <span className="text-slate-400 line-through">{h.from_value}</span>
+                          <ChevronRight size={10} className="text-slate-300" />
                           <span className="font-black text-slate-900">{h.to_value}</span>
                         </div>
                       ) : h.comment}
                     </div>
                   </div>
                 ))}
-                {loadingHistory && <div className="text-center py-4 text-xs text-slate-300 font-bold animate-pulse uppercase">Завантаження...</div>}
+                {history.length === 0 && !loadingHistory && (
+                  <div className="pl-8 text-xs text-slate-300 font-semibold">Подій ще немає</div>
+                )}
               </div>
             </div>
           </div>
@@ -635,8 +783,11 @@ function CarsManager({ cars, onRefresh, profile }: { cars: any[]; onRefresh: () 
 }
 
 // ─── Car Form ─────────────────────────────────────────────────
+const STEPS = ['Основне', 'Характеристики', 'Фото', 'Опис + SEO'];
+
 function CarForm({ car, onClose, onSaved }: { car?: any; onClose: () => void; onSaved: () => void }) {
   const isEdit = !!car;
+  const [step, setStep]   = useState(1);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: car?.title ?? '',
@@ -668,123 +819,99 @@ function CarForm({ car, onClose, onSaved }: { car?: any; onClose: () => void; on
     seo_h1: car?.seo_h1 ?? '',
   });
 
-  const [images, setImages] = useState<any[]>(car?.car_images ?? []);
-  const [uploading, setUploading] = useState(false);
+  const [images, setImages]         = useState<any[]>(car?.car_images ?? []);
+  const [uploading, setUploading]   = useState(false);
+  const [dragIdx, setDragIdx]       = useState<number | null>(null);
+  const [brandOpts, setBrandOpts]   = useState<string[]>([]);
+  const [modelOpts, setModelOpts]   = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropRef      = useRef<HTMLDivElement>(null);
+
+  // Автодоповнення брендів при монтуванні
+  useEffect(() => {
+    supabase.from('cars').select('brand').eq('status', 'active')
+      .then(({ data }) => data && setBrandOpts([...new Set(data.map((r: any) => r.brand))].filter(Boolean).sort() as string[]));
+  }, []);
+
+  // Автодоповнення моделей при зміні бренду
+  useEffect(() => {
+    if (!form.brand) { setModelOpts([]); return; }
+    supabase.from('cars').select('model').eq('brand', form.brand).eq('status', 'active')
+      .then(({ data }) => data && setModelOpts([...new Set(data.map((r: any) => r.model))].filter(Boolean).sort() as string[]));
+  }, [form.brand]);
 
   const set = (k: string) => (e: React.ChangeEvent<any>) =>
     setForm(p => ({ ...p, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
-  async function save() {
-    setSaving(true);
-    try {
-      const slug = isEdit ? car.slug : `${form.brand}-${form.model}-${form.year}-${Math.random().toString(36).substring(2, 5)}`.toLowerCase().replace(/\s+/g, '-');
-      const payload = {
-        ...form,
-        year: Number(form.year),
-        price: Number(form.price),
-        mileage: Number(form.mileage),
-        engine_volume: form.engine_volume ? Number(form.engine_volume) : null,
-        power_hp: form.power_hp ? Number(form.power_hp) : null,
-        owners_count: Number(form.owners_count),
-        accidents_count: Number(form.accidents_count),
-        trust_score: calcTrustScore(form),
-        slug
-      };
-
-      if (isEdit) {
-        await supabase.from('cars').update(payload).eq('id', car.id);
-      } else {
-        const { data: newCar } = await supabase.from('cars').insert([payload]).select().single();
-        if (newCar) {
-          // Прив'язка фото до нового авто
-          await Promise.all(images.map((img, i) =>
-            supabase.from('car_images').insert([{
-              car_id: newCar.id,
-              url: img.url,
-              url_webp: img.url,
-              is_cover: img.is_cover || i === 0,
-              sort_order: i
-            }])
-          ));
-        }
-      }
-      onSaved();
-    } catch (err) {
-      console.error(err);
-      toast.error('Помилка збереження');
-    } finally {
-      setSaving(false);
+  // ─── Drag & drop photo reorder ───────────────────────────────
+  const handleDragStart = (i: number) => setDragIdx(i);
+  const handleDrop = async (targetIdx: number) => {
+    if (dragIdx === null || dragIdx === targetIdx) { setDragIdx(null); return; }
+    const next = [...images];
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(targetIdx, 0, moved);
+    const updated = next.map((img, i) => ({ ...img, sort_order: i }));
+    setImages(updated);
+    setDragIdx(null);
+    if (isEdit) {
+      await Promise.all(updated.map(img => img.id && supabase.from('car_images').update({ sort_order: img.sort_order }).eq('id', img.id)));
     }
-  }
+  };
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!e.target.files?.length) return;
+  // ─── Drag & drop upload from outside ─────────────────────────
+  const handleDropZone = (e: React.DragEvent) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length) uploadFiles(files);
+  };
+
+  async function uploadFiles(files: File[]) {
     setUploading(true);
-    const files = Array.from(e.target.files);
-
     for (const file of files) {
       try {
         const ext = file.name.split('.').pop();
         const path = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${ext}`;
-
         const { data, error } = await supabase.storage.from('cars').upload(path, file);
         if (error) throw error;
-
         if (data) {
           const { data: { publicUrl } } = supabase.storage.from('cars').getPublicUrl(path);
-
-          const newImg = {
-            url: publicUrl,
-            is_cover: images.length === 0,
-            sort_order: images.length
-          };
-
+          const newImg = { url: publicUrl, is_cover: images.length === 0, sort_order: images.length };
           if (isEdit) {
             const { data: savedImg } = await supabase.from('car_images').insert([{
-              car_id: car.id,
-              url: publicUrl,
-              url_webp: publicUrl,
-              is_cover: newImg.is_cover,
-              sort_order: newImg.sort_order
+              car_id: car.id, url: publicUrl, url_webp: publicUrl,
+              is_cover: newImg.is_cover, sort_order: newImg.sort_order
             }]).select().single();
             setImages(p => [...p, savedImg]);
           } else {
             setImages(p => [...p, newImg]);
           }
         }
-      } catch (err) {
-        console.error('Upload error:', err);
-        toast.error('Помилка завантаження фото');
-      }
+      } catch { toast.error('Помилка завантаження фото'); }
     }
     setUploading(false);
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files?.length) return;
+    await uploadFiles(Array.from(e.target.files));
   }
 
   async function deleteImage(img: any) {
     if (!confirm('Видалити фото?')) return;
     try {
-      if (img.id) {
-        await supabase.from('car_images').delete().eq('id', img.id);
-      }
+      if (img.id) await supabase.from('car_images').delete().eq('id', img.id);
       const path = img.url.split('/').pop();
       await supabase.storage.from('cars').remove([path]);
       setImages(p => p.filter(i => i.url !== img.url));
-    } catch (err) {
-      console.error('Delete error:', err);
-    }
+    } catch { /* ignore */ }
   }
 
   async function setCover(img: any) {
-    try {
-      if (isEdit) {
-        await supabase.from('car_images').update({ is_cover: false }).eq('car_id', car.id);
-        await supabase.from('car_images').update({ is_cover: true }).eq('id', img.id);
-      }
-      setImages(p => p.map(i => ({ ...i, is_cover: i.url === img.url })));
-    } catch (err) {
-      console.error(err);
+    if (isEdit && img.id) {
+      await supabase.from('car_images').update({ is_cover: false }).eq('car_id', car.id);
+      await supabase.from('car_images').update({ is_cover: true }).eq('id', img.id);
     }
+    setImages(p => p.map(i => ({ ...i, is_cover: i.url === img.url })));
   }
 
   async function generateAiSeo() {
@@ -794,196 +921,375 @@ function CarForm({ car, onClose, onSaved }: { car?: any; onClose: () => void; on
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          save: false, // лише повертаємо дані, не зберігаємо (форма ще не збережена)
+          save: false,
           cars: [{ id: car?.id ?? 0, brand: form.brand, model: form.model, year: Number(form.year), city: form.city, price: Number(form.price), engine_volume: Number(form.engine_volume), mileage: Number(form.mileage) }],
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
       const seo = json.results?.[0];
-      if (seo) {
-        setForm(p => ({
-          ...p,
-          seo_title: seo.seo_title,
-          seo_description: seo.seo_description,
-          seo_h1: `${form.brand} ${form.model} ${form.year}`,
-        }));
-      }
+      if (seo) setForm(p => ({ ...p, seo_title: seo.seo_title, seo_description: seo.seo_description, seo_h1: `${form.brand} ${form.model} ${form.year}` }));
     } catch (e: any) {
-      // Fallback на шаблон якщо AI недоступний
-      setForm(p => ({
-        ...p,
-        seo_title: `Купити ${form.brand} ${form.model} ${form.year} року — VIP.S Cars`,
-        seo_description: `${form.brand} ${form.model} (${form.year}) у ${form.city}. Пробіг ${form.mileage} км. Перевірене авто.`,
-        seo_h1: `${form.brand} ${form.model} ${form.year}`,
-      }));
+      setForm(p => ({ ...p, seo_title: `Купити ${form.brand} ${form.model} ${form.year} — VIP.S Cars`, seo_description: `${form.brand} ${form.model} (${form.year}) у ${form.city}. Пробіг ${form.mileage} км.`, seo_h1: `${form.brand} ${form.model} ${form.year}` }));
+    } finally { setUploading(false); }
+  }
+
+  async function improveDescription() {
+    if (!form.brand) return;
+    setUploading(true);
+    try {
+      const res = await fetch('/api/ai/improve-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ save: false, cars: [{ id: car?.id ?? 0, brand: form.brand, model: form.model, year: Number(form.year), description: form.description }] }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      const improved = json.results?.[0]?.description;
+      if (improved) { setForm(p => ({ ...p, description: improved })); toast.success('Опис покращено'); }
+    } catch (e: any) { toast.error(`AI помилка: ${e.message}`); }
+    finally { setUploading(false); }
+  }
+
+  async function save() {
+    if (!form.brand || !form.model || !form.price) { toast.error('Заповніть обов\'язкові поля (Марка, Модель, Ціна)'); return; }
+    setSaving(true);
+    try {
+      const seoSlug = isEdit ? car.seo_slug : `${form.brand}-${form.model}-${form.year}-${Math.random().toString(36).substring(2, 5)}`.toLowerCase().replace(/\s+/g, '-');
+      const payload = {
+        ...form,
+        year: Number(form.year), price: Number(form.price), mileage: Number(form.mileage),
+        engine_volume: form.engine_volume ? Number(form.engine_volume) : null,
+        power_hp: form.power_hp ? Number(form.power_hp) : null,
+        owners_count: Number(form.owners_count), accidents_count: Number(form.accidents_count),
+        trust_score: calcTrustScore(form), seo_slug: seoSlug,
+      };
+
+      let carId = car?.id;
+      if (isEdit) {
+        await supabase.from('cars').update(payload).eq('id', car.id);
+      } else {
+        const { data: newCar, error } = await supabase.from('cars').insert([payload]).select().single();
+        if (error) throw error;
+        carId = newCar.id;
+        await Promise.all(images.map((img, i) =>
+          supabase.from('car_images').insert([{ car_id: carId, url: img.url, url_webp: img.url, is_cover: img.is_cover || i === 0, sort_order: i }])
+        ));
+      }
+
+      // Ринкова медіана
+      if (carId) {
+        const { data: market } = await supabase.from('market_prices').select('median_price')
+          .eq('brand', form.brand).eq('model', form.model).eq('year', Number(form.year)).maybeSingle();
+        if (market?.median_price) await supabase.from('cars').update({ market_price: market.median_price }).eq('id', carId);
+      }
+
+      // Тригер AI-правил при активній публікації
+      if (form.status === 'active') {
+        fetch('/api/subscription-check', { method: 'POST' }).catch(() => {});
+      }
+
+      toast.success(isEdit ? 'Збережено' : 'Авто опубліковано');
+      onSaved();
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Помилка збереження');
     } finally {
-      setUploading(false);
+      setSaving(false);
     }
   }
 
   const inp = "w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-blue/10 focus:border-brand-blue transition-all";
   const label = "text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block";
 
+  const trust = calcTrustScore(form);
+  const previewCar = { ...form, car_images: images, trust_score: trust, price: Number(form.price) || 0 };
+
   return (
     <div className="space-y-6 pb-20">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-slate-900">{isEdit ? 'Редагувати оголошення' : 'Нове авто'}</h1>
-          <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">{isEdit ? `ID: ${car.id}` : 'Створення нового лоту'}</p>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">{isEdit ? `ID: ${car.id}` : 'Крок ' + step + ' з 4'}</p>
         </div>
         <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"><X size={24} /></button>
       </div>
 
+      {/* Step indicator */}
+      <div className="flex items-center gap-2">
+        {STEPS.map((s, i) => {
+          const n = i + 1;
+          return (
+            <React.Fragment key={n}>
+              <button onClick={() => setStep(n)}
+                className={cn('flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all',
+                  step === n ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/20'
+                  : n < step ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400 hover:bg-slate-200')}>
+                <span className={cn('w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black',
+                  step === n ? 'bg-white/20' : n < step ? 'bg-green-500 text-white' : 'bg-slate-300 text-white')}>
+                  {n < step ? '✓' : n}
+                </span>
+                <span className="hidden sm:inline">{s}</span>
+              </button>
+              {i < STEPS.length - 1 && <div className={cn('flex-1 h-0.5 rounded', n < step ? 'bg-green-300' : 'bg-slate-200')} />}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Hidden file input */}
+      <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple accept="image/*" className="hidden" />
+
+      {/* Datalists for autocomplete */}
+      <datalist id="car-brands">{brandOpts.map(b => <option key={b} value={b} />)}</datalist>
+      <datalist id="car-models">{modelOpts.map(m => <option key={m} value={m} />)}</datalist>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ─── Main content ─────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Основне */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-6">
-            <h2 className="text-lg font-black text-slate-900 border-b border-slate-50 pb-4">Основна інформація</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div><label className={label}>Марка *</label><input value={form.brand} onChange={set('brand')} className={inp} placeholder="напр. BMW" /></div>
-              <div><label className={label}>Модель *</label><input value={form.model} onChange={set('model')} className={inp} placeholder="напр. X5" /></div>
-              <div><label className={label}>Рік *</label><input type="number" value={form.year} onChange={set('year')} className={inp} /></div>
-              <div><label className={label}>Місто *</label><input value={form.city} onChange={set('city')} className={inp} placeholder="Київ" /></div>
-              <div><label className={label}>Ціна ($) *</label><input type="number" value={form.price} onChange={set('price')} className={inp} /></div>
-              <div><label className={label}>Пробіг (км) *</label><input type="number" value={form.mileage} onChange={set('mileage')} className={inp} /></div>
-            </div>
-            <div>
-              <label className={label}>Опис</label>
-              <textarea value={form.description} onChange={set('description')} className={cn(inp, "h-32 resize-none")} placeholder="Детальний опис стану авто..." />
-            </div>
-          </div>
 
-          {/* Технічні */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-6">
-            <h2 className="text-lg font-black text-slate-900 border-b border-slate-50 pb-4">Технічні характеристики</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div><label className={label}>Об'єм двигуна (л)</label><input step="0.1" type="number" value={form.engine_volume} onChange={set('engine_volume')} className={inp} /></div>
-              <div><label className={label}>Потужність (к.с.)</label><input type="number" value={form.power_hp} onChange={set('power_hp')} className={inp} /></div>
-              <div>
-                <label className={label}>Паливо</label>
-                <select value={form.engine_type} onChange={set('engine_type')} className={inp}>
-                  <option value="">—</option>
-                  {['бензин', 'дизель', 'газ/бензин', 'електро', 'гібрид'].map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className={label}>КПП</label>
-                <select value={form.transmission} onChange={set('transmission')} className={inp}>
-                  <option value="">—</option>
-                  {['автомат', 'механіка', 'варіатор', 'робот'].map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className={label}>Привід</label>
-                <select value={form.drive_type} onChange={set('drive_type')} className={inp}>
-                  <option value="">—</option>
-                  {['передній', 'задній', 'повний'].map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              <div><label className={label}>VIN код</label><input value={form.vin} onChange={set('vin')} className={inp} maxLength={17} placeholder="17 символів" /></div>
-            </div>
-          </div>
-
-          {/* Фото */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-50 pb-4">
-              <h2 className="text-lg font-black text-slate-900">Фотографії</h2>
-              <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-800 disabled:opacity-50 transition-all">
-                {uploading ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />}
-                Додати фото
-              </button>
-              <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple accept="image/*" className="hidden" />
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {images.map((img, i) => (
-                <div key={i} className={cn("relative aspect-[4/3] rounded-2xl overflow-hidden border-2 group", img.is_cover ? "border-brand-blue" : "border-slate-100")}>
-                  <img src={img.url} className="w-full h-full object-cover" alt="" />
-                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <button onClick={() => setCover(img)} className="p-2 bg-white text-slate-900 rounded-lg hover:bg-brand-blue hover:text-white transition-colors" title="Зробити головною"><ShieldCheck size={16} /></button>
-                    <button onClick={() => deleteImage(img)} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-colors"><Trash2 size={16} /></button>
+          {/* ── Step 1: Основне ── */}
+          {step === 1 && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-6">
+              <h2 className="text-lg font-black text-slate-900 border-b border-slate-50 pb-4">Основна інформація</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className={label}>Марка *</label>
+                  <input list="car-brands" value={form.brand} onChange={set('brand')} className={inp} placeholder="Почніть вводити марку..." autoComplete="off" />
+                </div>
+                <div>
+                  <label className={label}>Модель *</label>
+                  <input list="car-models" value={form.model} onChange={set('model')} className={inp} placeholder={form.brand ? 'Оберіть модель...' : 'Спочатку оберіть марку'} autoComplete="off" />
+                </div>
+                <div><label className={label}>Рік *</label><input type="number" value={form.year} onChange={set('year')} className={inp} min="1990" max={new Date().getFullYear() + 1} /></div>
+                <div><label className={label}>Місто *</label><input value={form.city} onChange={set('city')} className={inp} placeholder="Київ" /></div>
+                <div>
+                  <label className={label}>Ціна *</label>
+                  <div className="flex gap-2">
+                    <select value={form.currency} onChange={set('currency')} className={cn(inp, 'w-24 shrink-0')}>
+                      <option value="USD">$</option>
+                      <option value="UAH">₴</option>
+                      <option value="EUR">€</option>
+                    </select>
+                    <input type="number" value={form.price} onChange={set('price')} className={inp} placeholder="0" />
                   </div>
-                  {img.is_cover && <div className="absolute top-2 left-2 bg-brand-blue text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Головна</div>}
                 </div>
-              ))}
-              {images.length === 0 && !uploading && (
-                <div onClick={() => fileInputRef.current?.click()} className="aspect-[4/3] rounded-2xl border-2 border-dashed border-slate-100 flex flex-col items-center justify-center text-slate-300 hover:border-brand-blue/30 hover:text-brand-blue transition-all cursor-pointer">
-                  <Image size={32} className="mb-2" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Немає фото</span>
+                <div><label className={label}>Пробіг (км) *</label><input type="number" value={form.mileage} onChange={set('mileage')} className={inp} placeholder="0" /></div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 2: Характеристики ── */}
+          {step === 2 && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-6">
+              <h2 className="text-lg font-black text-slate-900 border-b border-slate-50 pb-4">Технічні характеристики</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div><label className={label}>Об'єм двигуна (л)</label><input step="0.1" type="number" value={form.engine_volume} onChange={set('engine_volume')} className={inp} placeholder="2.0" /></div>
+                <div><label className={label}>Потужність (к.с.)</label><input type="number" value={form.power_hp} onChange={set('power_hp')} className={inp} placeholder="150" /></div>
+                <div>
+                  <label className={label}>Паливо</label>
+                  <select value={form.engine_type} onChange={set('engine_type')} className={inp}>
+                    <option value="">—</option>
+                    {['бензин', 'дизель', 'газ/бензин', 'електро', 'гібрид'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* SEO */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-50 pb-4">
-              <h2 className="text-lg font-black text-slate-900">SEO та Ранжування</h2>
-              <button onClick={generateAiSeo} disabled={uploading || !form.brand} className="px-4 py-2 bg-brand-blue/10 text-brand-blue rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-brand-blue hover:text-white transition-all">
-                <Zap size={14} /> AI SEO
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div><label className={label}>Meta Title</label><input value={form.seo_title} onChange={set('seo_title')} className={inp} placeholder="Оптимізований заголовок..." /></div>
-              <div><label className={label}>Meta Description</label><textarea value={form.seo_description} onChange={set('seo_description')} className={cn(inp, "h-20 resize-none")} placeholder="Опис для пошукових систем..." /></div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          {/* Стан та Статус */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-6 sticky top-8">
-            <h2 className="text-lg font-black text-slate-900 border-b border-slate-50 pb-4">Стан та Публікація</h2>
-            <div className="space-y-4">
-              <div><label className={label}>Кількість власників</label><input type="number" value={form.owners_count} onChange={set('owners_count')} className={inp} /></div>
-              <div><label className={label}>ДТП (кількість)</label><input type="number" value={form.accidents_count} onChange={set('accidents_count')} className={inp} /></div>
-
+                <div>
+                  <label className={label}>КПП</label>
+                  <select value={form.transmission} onChange={set('transmission')} className={inp}>
+                    <option value="">—</option>
+                    {['автомат', 'механіка', 'варіатор', 'робот'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>Привід</label>
+                  <select value={form.drive_type} onChange={set('drive_type')} className={inp}>
+                    <option value="">—</option>
+                    {['передній', 'задній', 'повний'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+                <div><label className={label}>VIN (17 символів)</label><input value={form.vin} onChange={set('vin')} className={inp} maxLength={17} placeholder="WBAFR9100BC..." /></div>
+                <div><label className={label}>Власників</label><input type="number" value={form.owners_count} onChange={set('owners_count')} className={inp} min="1" /></div>
+                <div><label className={label}>ДТП</label><input type="number" value={form.accidents_count} onChange={set('accidents_count')} className={inp} min="0" /></div>
+              </div>
               <div className="flex flex-col gap-3 pt-2">
                 <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
                   <input type="checkbox" checked={form.is_checked} onChange={set('is_checked')} className="w-5 h-5 accent-brand-blue" />
-                  <span className="text-sm font-bold text-slate-700">Перевірено (Checked)</span>
+                  <span className="text-sm font-bold text-slate-700">Перевірено нами</span>
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
                   <input type="checkbox" checked={form.service_history} onChange={set('service_history')} className="w-5 h-5 accent-brand-blue" />
-                  <span className="text-sm font-bold text-slate-700">Сервісна книжка</span>
+                  <span className="text-sm font-bold text-slate-700">Є сервісна книжка</span>
                 </label>
               </div>
+            </div>
+          )}
 
-              <div className="pt-4">
-                <label className={label}>Статус оголошення</label>
-                <select value={form.status} onChange={set('status')} className={cn(inp, "bg-brand-blue/5 border-brand-blue/20 font-bold")}>
-                  <option value="active">Активне</option>
-                  <option value="moderation">Модерація</option>
-                  <option value="sold">Продано</option>
-                  <option value="draft">Чернетка</option>
-                </select>
+          {/* ── Step 3: Фото ── */}
+          {step === 3 && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-50 pb-4">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Фотографії</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">Перетягніть для зміни порядку • Перша = обкладинка</p>
+                </div>
+                <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                  className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-800 disabled:opacity-50 transition-all">
+                  {uploading ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />} Додати фото
+                </button>
               </div>
 
-              <div className="pt-4">
-                <label className={label}>Бейдж</label>
-                <select value={form.badge} onChange={set('badge')} className={inp}>
-                  <option value="">Без бейджа</option>
-                  {['нове', 'вигідно', 'терміново', 'ексклюзив'].map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
+              {/* Drop zone */}
+              <div ref={dropRef} onDragOver={e => e.preventDefault()} onDrop={handleDropZone}
+                className="border-2 border-dashed border-slate-200 rounded-2xl p-4 text-center text-xs text-slate-400 font-semibold hover:border-brand-blue/40 transition-colors">
+                Перетягніть фото сюди або натисніть «Додати фото»
+              </div>
+
+              {/* Photo grid with DnD reorder */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {images.map((img, i) => (
+                  <div key={img.url + i}
+                    draggable
+                    onDragStart={() => handleDragStart(i)}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={() => handleDrop(i)}
+                    className={cn('relative aspect-[4/3] rounded-2xl overflow-hidden border-2 group cursor-grab active:cursor-grabbing transition-all',
+                      img.is_cover ? 'border-brand-blue' : 'border-slate-100',
+                      dragIdx === i ? 'opacity-50 scale-95' : 'opacity-100')}>
+                    <img src={img.url} className="w-full h-full object-cover pointer-events-none" alt="" />
+                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <button onClick={() => setCover(img)} title="Зробити головною"
+                        className="p-2 bg-white text-slate-900 rounded-lg hover:bg-brand-blue hover:text-white transition-colors">
+                        <ShieldCheck size={15} />
+                      </button>
+                      <button onClick={() => deleteImage(img)}
+                        className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-colors">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    {img.is_cover && (
+                      <div className="absolute top-2 left-2 bg-brand-blue text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Головна</div>
+                    )}
+                    <div className="absolute bottom-2 right-2 bg-black/50 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">#{i + 1}</div>
+                  </div>
+                ))}
+                {images.length === 0 && !uploading && (
+                  <div onClick={() => fileInputRef.current?.click()}
+                    className="col-span-4 aspect-[21/9] rounded-2xl border-2 border-dashed border-slate-100 flex flex-col items-center justify-center text-slate-300 hover:border-brand-blue/30 hover:text-brand-blue transition-all cursor-pointer">
+                    <Image size={40} className="mb-2" />
+                    <span className="text-xs font-black uppercase tracking-widest">Фото відсутні — натисніть або перетягніть</span>
+                  </div>
+                )}
               </div>
             </div>
+          )}
 
-            <div className="pt-6 border-t border-slate-50">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Trust Index</span>
-                <span className={cn("text-lg font-black", calcTrustScore(form) >= 70 ? "text-green-500" : "text-yellow-500")}>{calcTrustScore(form)}%</span>
+          {/* ── Step 4: Опис + SEO ── */}
+          {step === 4 && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-50 pb-4">
+                  <h2 className="text-lg font-black text-slate-900">Опис авто</h2>
+                  <button onClick={improveDescription} disabled={uploading || !form.brand}
+                    className="px-4 py-2 bg-brand-blue/10 text-brand-blue rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-brand-blue hover:text-white transition-all disabled:opacity-40">
+                    {uploading ? <RefreshCw size={13} className="animate-spin" /> : <Zap size={13} />} AI: Покращити
+                  </button>
+                </div>
+                <textarea value={form.description} onChange={set('description')} rows={8}
+                  className={cn(inp, 'resize-none')} placeholder="Детальний опис стану авто, комплектації, особливостей..." />
               </div>
-              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className={cn("h-full transition-all duration-500", calcTrustScore(form) >= 70 ? "bg-green-500" : "bg-yellow-500")} style={{ width: `${calcTrustScore(form)}%` }} />
+
+              <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-50 pb-4">
+                  <h2 className="text-lg font-black text-slate-900">SEO</h2>
+                  <button onClick={generateAiSeo} disabled={uploading || !form.brand}
+                    className="px-4 py-2 bg-brand-blue/10 text-brand-blue rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-brand-blue hover:text-white transition-all disabled:opacity-40">
+                    {uploading ? <RefreshCw size={13} className="animate-spin" /> : <Zap size={13} />} AI: Згенерувати SEO
+                  </button>
+                </div>
+                <div><label className={label}>Meta Title (до 60 символів)</label>
+                  <input value={form.seo_title} onChange={set('seo_title')} className={inp} placeholder="Купити BMW X5 2022 в Києві..." />
+                  <p className={cn('text-right text-[10px] mt-1 font-semibold', form.seo_title.length > 60 ? 'text-red-400' : 'text-slate-300')}>{form.seo_title.length}/60</p>
+                </div>
+                <div><label className={label}>Meta Description (до 155 символів)</label>
+                  <textarea value={form.seo_description} onChange={set('seo_description')} rows={3} className={cn(inp, 'resize-none')} placeholder="Опис для пошукових систем..." />
+                  <p className={cn('text-right text-[10px] mt-1 font-semibold', form.seo_description.length > 155 ? 'text-red-400' : 'text-slate-300')}>{form.seo_description.length}/155</p>
+                </div>
+                <div><label className={label}>H1 заголовок</label>
+                  <input value={form.seo_h1} onChange={set('seo_h1')} className={inp} placeholder={`${form.brand} ${form.model} ${form.year}`} />
+                </div>
+              </div>
+
+              <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-4">
+                <h2 className="text-lg font-black text-slate-900 border-b border-slate-50 pb-4">Публікація</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={label}>Статус</label>
+                    <select value={form.status} onChange={set('status')} className={cn(inp, 'font-bold bg-brand-blue/5 border-brand-blue/20')}>
+                      <option value="active">Активне</option>
+                      <option value="moderation">Модерація</option>
+                      <option value="sold">Продано</option>
+                      <option value="draft">Чернетка</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={label}>Бейдж</label>
+                    <select value={form.badge} onChange={set('badge')} className={inp}>
+                      <option value="">Без бейджа</option>
+                      {['нове', 'вигідно', 'терміново', 'ексклюзив'].map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
+          )}
 
-            <button onClick={save} disabled={saving} className="w-full mt-8 py-4 bg-brand-blue text-white rounded-2xl font-black shadow-xl shadow-brand-blue/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
-              {saving ? <RefreshCw className="animate-spin mx-auto" /> : isEdit ? 'Зберегти зміни' : 'Опублікувати'}
+          {/* ── Navigation ── */}
+          <div className="flex gap-3 justify-between">
+            <button onClick={() => setStep(s => s - 1)} disabled={step === 1}
+              className="px-6 py-3 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30 transition-all">
+              ← Назад
             </button>
-            <button onClick={onClose} className="w-full mt-3 py-3 text-slate-400 font-bold text-sm hover:text-slate-600 transition-colors">Скасувати</button>
+            {step < 4
+              ? <button onClick={() => setStep(s => s + 1)}
+                  className="px-8 py-3 bg-brand-blue text-white rounded-xl font-bold shadow-lg shadow-brand-blue/20 hover:bg-brand-blue-dark transition-all">
+                  Далі →
+                </button>
+              : <button onClick={save} disabled={saving}
+                  className="px-8 py-3 bg-brand-blue text-white rounded-xl font-black shadow-xl shadow-brand-blue/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2">
+                  {saving ? <><RefreshCw size={16} className="animate-spin" /> Збереження...</> : isEdit ? '✓ Зберегти зміни' : '✓ Опублікувати'}
+                </button>
+            }
           </div>
+        </div>
+
+        {/* ─── Right: Live Preview + controls ──────────── */}
+        <div className="space-y-4 sticky top-24 self-start">
+          {/* Live preview */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-sm">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3 px-1">Live Preview</p>
+            <div className="pointer-events-none">
+              <CarCard car={previewCar} />
+            </div>
+          </div>
+
+          {/* Trust score */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Trust Score</span>
+              <span className={cn('text-lg font-black', trust >= 70 ? 'text-green-500' : trust >= 40 ? 'text-yellow-500' : 'text-red-400')}>{trust}</span>
+            </div>
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div className={cn('h-full transition-all duration-500', trust >= 70 ? 'bg-green-500' : trust >= 40 ? 'bg-yellow-500' : 'bg-red-400')} style={{ width: `${trust}%` }} />
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1.5">
+              {trust >= 70 ? 'Висока довіра' : trust >= 40 ? 'Середня довіра' : 'Низька — заповніть більше полів'}
+            </p>
+          </div>
+
+          <button onClick={onClose} className="w-full py-2.5 text-slate-400 font-bold text-sm hover:text-slate-600 transition-colors text-center">
+            Скасувати
+          </button>
         </div>
       </div>
     </div>
@@ -1794,6 +2100,7 @@ export default function Admin() {
   const [profile, setProfile] = useState<any>(null);
   const [uSearch, setUSearch] = useState('');
   const [uResults, setUResults] = useState<{ cars: any[], leads: any[] }>({ cars: [], leads: [] });
+  const [isSearching, setIsSearching] = useState(false);
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -2030,7 +2337,7 @@ export default function Admin() {
               <motion.div key={tab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="max-w-7xl mx-auto">
                 {tab === 'dashboard' && <Dashboard leads={leads} cars={cars} stats={stats} aiLogsCount={aiLogsCount} setTab={setTab} />}
                 {tab === 'cars' && <CarsManager cars={cars} onRefresh={loadData} profile={profile} />}
-                {tab === 'leads' && <LeadsManager leads={leads} onRefresh={loadData} />}
+                {tab === 'leads' && <LeadsManager leads={leads} onRefresh={loadData} profile={profile} />}
                 {tab === 'users' && <UsersManager />}
                 {tab === 'seo' && <SeoManager />}
                 {tab === 'analytics' && <AnalyticsManager cars={cars} leads={leads} />}

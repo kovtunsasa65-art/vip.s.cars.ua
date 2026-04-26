@@ -122,6 +122,16 @@ CREATE POLICY "auth_insert_review"    ON reviews FOR INSERT TO authenticated WIT
 CREATE POLICY "admin_all_reviews"     ON reviews FOR ALL USING (auth.role() = 'service_role');
 
 
+-- ─── 4. CRM: нові статуси лідів (5 колонок Kanban) ─────────
+-- Якщо leads.status має обмеження enum — розширюємо або переходимо на TEXT
+ALTER TABLE leads ALTER COLUMN status TYPE TEXT;
+-- Тепер статуси: 'новий' | 'в роботі' | "зв'язались" | 'закрито (виграш)' | 'закрито (програш)'
+-- Існуючі ліди зі статусом 'закрито' лишаються без змін (до ручної міграції).
+
+-- Індекс для швидкої фільтрації по статусу
+CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
+CREATE INDEX IF NOT EXISTS idx_leads_score  ON leads(score);
+
 -- ─── ГОТОВО ──────────────────────────────────────────────────
 -- Після виконання перевір у Table Editor що з'явились:
 -- • search_events

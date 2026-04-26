@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { PHONE_TEL } from './lib/config';
 import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
@@ -19,28 +19,41 @@ import AboutUs from './components/AboutUs';
 import Reviews from './components/Reviews';
 import LeadForm from './components/LeadForm';
 import Footer from './components/Footer';
-import Admin from './pages/Admin';
-import Login from './pages/Login';
-import ClientDashboard from './pages/ClientDashboard';
-import CarDetails from './pages/CarDetails';
-import { AvtopidbirPage, VykupPage, PerevirkaPage, ObminPage } from './pages/ServicePages';
-import ComparePage from './pages/ComparePage';
-import FeedPage from './pages/FeedPage';
-import NotFoundPage from './pages/NotFoundPage';
-import Favorites from './pages/Favorites';
-import BlogList from './pages/BlogList';
-import BlogPost from './pages/BlogPost';
-import SitemapHtml from './pages/SitemapHtml';
-import SitemapXml from './pages/SitemapXml';
-import Privacy from './pages/Privacy';
-import Cookie from './pages/Cookie';
-import Terms from './pages/Terms';
-import Oferta from './pages/Oferta';
-import ServerError from './pages/ServerError';
-import Maintenance from './pages/Maintenance';
 import ProtectedRoute from './components/ProtectedRoute';
 import InstallPWA from './components/InstallPWA';
 import ToastContainer from './components/ToastContainer';
+
+// Lazy-loaded — не завантажуються при першому відкритті сайту
+const Admin           = lazy(() => import('./pages/Admin'));
+const Login           = lazy(() => import('./pages/Login'));
+const ClientDashboard = lazy(() => import('./pages/ClientDashboard'));
+const CarDetails      = lazy(() => import('./pages/CarDetails'));
+const ComparePage     = lazy(() => import('./pages/ComparePage'));
+const FeedPage        = lazy(() => import('./pages/FeedPage'));
+const NotFoundPage    = lazy(() => import('./pages/NotFoundPage'));
+const Favorites       = lazy(() => import('./pages/Favorites'));
+const BlogList        = lazy(() => import('./pages/BlogList'));
+const BlogPost        = lazy(() => import('./pages/BlogPost'));
+const SitemapHtml     = lazy(() => import('./pages/SitemapHtml'));
+const SitemapXml      = lazy(() => import('./pages/SitemapXml'));
+const Privacy         = lazy(() => import('./pages/Privacy'));
+const Cookie          = lazy(() => import('./pages/Cookie'));
+const Terms           = lazy(() => import('./pages/Terms'));
+const Oferta          = lazy(() => import('./pages/Oferta'));
+const ServerError     = lazy(() => import('./pages/ServerError'));
+const Maintenance     = lazy(() => import('./pages/Maintenance'));
+const { AvtopidbirPage, VykupPage, PerevirkaPage, ObminPage } = {
+  AvtopidbirPage: lazy(() => import('./pages/ServicePages').then(m => ({ default: m.AvtopidbirPage }))),
+  VykupPage:      lazy(() => import('./pages/ServicePages').then(m => ({ default: m.VykupPage }))),
+  PerevirkaPage:  lazy(() => import('./pages/ServicePages').then(m => ({ default: m.PerevirkaPage }))),
+  ObminPage:      lazy(() => import('./pages/ServicePages').then(m => ({ default: m.ObminPage }))),
+};
+
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="w-8 h-8 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 function ScrollAnimatedButtons() {
   const { scrollY } = useScroll();
@@ -118,6 +131,7 @@ function PageWrapper({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <Router>
+      <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/admin-login" element={<Login />} />
@@ -140,6 +154,7 @@ export default function App() {
           <div className="min-h-screen bg-white text-slate-900 selection:bg-brand-blue selection:text-white">
             <Navbar />
             
+            <Suspense fallback={<PageLoader />}>
             <AnimatePresence mode="wait">
               <Routes>
                 <Route path="/" element={<HomePage />} />
@@ -170,6 +185,7 @@ export default function App() {
                 <Route path="*"           element={<NotFoundPage />} />
               </Routes>
             </AnimatePresence>
+            </Suspense>
             <InstallPWA />
             <ToastContainer />
 
@@ -182,6 +198,7 @@ export default function App() {
           </div>
         } />
       </Routes>
+      </Suspense>
     </Router>
   );
 }
