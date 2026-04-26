@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { sendTelegramNotification, formatLeadMessage } from '../services/telegramService';
 import { PHONE_RAW, PHONE_DISPLAY } from '../lib/config';
+import FullBuybackForm from './FullBuybackForm';
 
 interface LeadFormBlockProps {
   type: string;
@@ -13,6 +14,19 @@ export default function LeadFormBlock({ type, title, placeholder }: LeadFormBloc
   const [form, setForm] = useState({ name: '', phone: '', message: '' });
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Якщо тип "викуп" - показуємо повну форму
+  if (type === 'викуп') {
+    return (
+      <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl overflow-hidden">
+        <div className="p-6 bg-slate-900 text-white">
+          <h3 className="font-black text-lg">{title}</h3>
+          <p className="text-[10px] text-brand-blue font-black uppercase tracking-widest mt-1">Оцінка за 1 годину</p>
+        </div>
+        <FullBuybackForm embedded />
+      </div>
+    );
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
