@@ -5,7 +5,7 @@
 
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { PHONE_TEL } from './lib/config';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
 import { Phone, MessageCircle } from 'lucide-react';
 import React from 'react';
 import Navbar from './components/Navbar';
@@ -40,6 +40,46 @@ import Maintenance from './pages/Maintenance';
 import ProtectedRoute from './components/ProtectedRoute';
 import InstallPWA from './components/InstallPWA';
 import ToastContainer from './components/ToastContainer';
+
+function ScrollAnimatedButtons() {
+  const { scrollY } = useScroll();
+  
+  // Circular trajectory (approximate arc):
+  // At scroll 0:   x: -72, y: 0
+  // At scroll 75:  x: -51, y: -51 (the curve point)
+  // At scroll 150: x: 0,   y: -72
+  const x = useTransform(scrollY, [0, 75, 150], [-72, -51, 0]);
+  const y = useTransform(scrollY, [0, 75, 150], [0, -51, -72]);
+  const scale = useTransform(scrollY, [0, 150], [1, 1]);
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center">
+      <motion.a
+        href="https://t.me/vips_cars"
+        target="_blank"
+        rel="noreferrer"
+        style={{ x, y, scale }}
+        className="absolute w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20 pointer-events-auto cursor-pointer"
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+      >
+        <MessageCircle size={24} />
+      </motion.a>
+
+      <motion.a
+        href={PHONE_TEL}
+        className="absolute w-16 h-16 bg-green-500 text-white rounded-full flex items-center justify-center shadow-xl shadow-green-500/20 pointer-events-auto cursor-pointer"
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+      >
+        <div className="absolute inset-0 rounded-full animate-ping bg-green-500 opacity-20 pointer-events-none" />
+        <Phone size={28} />
+      </motion.a>
+    </div>
+  );
+}
 
 function HomePage() {
   return (
@@ -134,33 +174,9 @@ export default function App() {
 
             <Footer />
 
-            {/* Floating Call Button */}
-            <div className="fixed bottom-20 md:bottom-6 right-6 z-[60] flex flex-col gap-3 group">
-              <motion.a
-                href="https://t.me/vips_cars"
-                target="_blank"
-                rel="noreferrer"
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                className="w-14 h-14 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20"
-              >
-                <MessageCircle size={24} />
-              </motion.a>
-              
-              <motion.a
-                href={PHONE_TEL}
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.1 }}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                className="w-16 h-16 bg-green-500 text-white rounded-full flex items-center justify-center shadow-xl shadow-green-500/20 relative"
-              >
-                <div className="absolute inset-0 rounded-full animate-ping bg-green-500 opacity-20 pointer-events-none" />
-                <Phone size={28} />
-              </motion.a>
+            {/* Floating Buttons Container */}
+            <div className="fixed bottom-20 md:bottom-6 right-6 z-[60] h-16 w-16 pointer-events-none">
+              <ScrollAnimatedButtons />
             </div>
           </div>
         } />
