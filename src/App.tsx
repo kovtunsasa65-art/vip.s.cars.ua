@@ -28,7 +28,13 @@ const Admin           = lazy(() => import('./pages/Admin'));
 const Login           = lazy(() => import('./pages/Login'));
 const ClientDashboard = lazy(() => import('./pages/ClientDashboard'));
 const SellCar         = lazy(() => import('./pages/SellCar'));
-const CarDetails      = lazy(() => import('./pages/CarDetails'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const UpdatePassword = lazy(() => import('./pages/UpdatePassword'));
+
+// ... у Routes ...
+<Route path="/forgot-password" element={<ForgotPassword />} />
+<Route path="/update-password" element={<UpdatePassword />} />
+
 const ComparePage     = lazy(() => import('./pages/ComparePage'));
 const FeedPage        = lazy(() => import('./pages/FeedPage'));
 const NotFoundPage    = lazy(() => import('./pages/NotFoundPage'));

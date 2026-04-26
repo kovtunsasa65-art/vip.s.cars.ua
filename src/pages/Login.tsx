@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Lock, Mail, Loader2, ArrowLeft } from 'lucide-react';
 
 export default function Login() {
@@ -38,7 +38,6 @@ export default function Login() {
         });
         if (error) throw error;
         
-        // Redirect based on mode
         if (isAdminMode) {
           navigate('/admin');
         } else {
@@ -54,7 +53,6 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Decoration */}
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-brand-blue/5 rounded-full blur-3xl" />
       <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-brand-blue/5 rounded-full blur-3xl" />
 
@@ -77,84 +75,49 @@ export default function Login() {
           </div>
           <p className="text-xs font-black text-brand-blue uppercase tracking-widest pl-1 mb-2">{isSignUp ? 'Реєстрація' : 'Авторизація'}</p>
           <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-none">
-            {isSignUp ? (
-              <>Створити <br/>акаунт</>
-            ) : (
-              isAdminMode ? <>Вхід в <br/>панель</> : <>Вхід для <br/>клієнта</>
-            )}
+            {isSignUp ? <>Створити <br/>акаунт</> : (isAdminMode ? <>Вхід в <br/>панель</> : <>Вхід для <br/>клієнта</>)}
           </h1>
         </div>
 
-        {error && (
-          <div className="mb-8 p-4 bg-red-50 rounded-2xl border border-red-100 text-red-500 text-xs font-bold leading-relaxed italic">
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div className="mb-8 p-4 bg-green-50 rounded-2xl border border-green-100 text-green-500 text-xs font-bold leading-relaxed italic">
-            {message}
-          </div>
-        )}
+        {error && <div className="mb-8 p-4 bg-red-50 rounded-2xl border border-red-100 text-red-500 text-xs font-bold">{error}</div>}
+        {message && <div className="mb-8 p-4 bg-green-50 rounded-2xl border border-green-100 text-green-500 text-xs font-bold">{message}</div>}
 
         <form onSubmit={handleAuth} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest pl-1">ID Користувача (Email)</label>
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest pl-1">Ваш Email</label>
             <div className="relative">
               <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-              <input
-                required
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 py-4 pl-14 pr-6 rounded-2xl text-slate-900 text-sm focus:outline-none focus:border-brand-blue focus:ring-4 focus:ring-brand-blue/5 transition-all font-bold"
-                placeholder="admin@vips.ua"
-              />
+              <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 py-4 pl-14 pr-6 rounded-2xl text-slate-900 text-sm focus:border-brand-blue outline-none transition-all font-bold"
+                placeholder="admin@vips.ua" />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest pl-1">Ключ доступу (Пароль)</label>
+            <div className="flex justify-between items-center pl-1">
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Пароль</label>
+              {!isSignUp && (
+                <Link to="/forgot-password" size="sm" className="text-[10px] font-black text-brand-blue uppercase tracking-widest hover:underline">
+                  Забули?
+                </Link>
+              )}
+            </div>
             <div className="relative">
               <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-              <input
-                required
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 py-4 pl-14 pr-6 rounded-2xl text-slate-900 text-sm focus:outline-none focus:border-brand-blue focus:ring-4 focus:ring-brand-blue/5 transition-all font-bold"
-                placeholder="••••••••"
-              />
+              <input required type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 py-4 pl-14 pr-6 rounded-2xl text-slate-900 text-sm focus:border-brand-blue outline-none transition-all font-bold"
+                placeholder="••••••••" />
             </div>
           </div>
 
-          <button
-            disabled={loading}
-            className="w-full bg-brand-blue text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-brand-blue-dark active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50 shadow-xl shadow-brand-blue/20"
-          >
-            {loading ? (
-              <Loader2 className="animate-spin" size={18} />
-            ) : (
-              isSignUp ? 'Зареєструватися' : 'Увійти в систему'
-            )}
+          <button disabled={loading} className="w-full bg-brand-blue text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-xl shadow-brand-blue/20 flex items-center justify-center gap-3">
+            {loading ? <Loader2 className="animate-spin" size={18} /> : (isSignUp ? 'Зареєструватися' : 'Увійти')}
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setError(null);
-              setMessage(null);
-            }}
-            className="w-full text-center text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-brand-blue transition-colors mt-6"
-          >
+          <button type="button" onClick={() => setIsSignUp(!isSignUp)} className="w-full text-center text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-brand-blue mt-6 transition-colors">
             {isSignUp ? 'Вже є акаунт? Увійти' : 'Немає акаунту? Реєстрація'}
           </button>
         </form>
-
-        <p className="mt-12 text-center text-slate-300 text-[10px] font-black uppercase tracking-[0.2em] italic">
-          {isAdminMode ? 'Доступ тільки для експертів VIP.S CARS' : 'Ваш персональний доступ до сервісу'}
-        </p>
       </motion.div>
     </div>
   );
