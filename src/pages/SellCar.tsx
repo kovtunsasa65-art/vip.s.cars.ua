@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Header from '../components/Header';
+import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import CarForm from './admin/CarForm';
 import { supabase } from '../lib/supabase';
@@ -33,7 +33,7 @@ export default function SellCar() {
   if (submitted) {
     return (
       <div className="min-h-screen bg-white">
-        <Header />
+        <Navbar />
         <main className="max-w-4xl mx-auto px-6 py-32 text-center">
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="space-y-8">
             <div className="w-24 h-24 bg-green-100 text-green-600 rounded-[32px] flex items-center justify-center mx-auto shadow-xl shadow-green-100/50">
@@ -51,7 +51,7 @@ export default function SellCar() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Header />
+      <Navbar />
       
       {/* Hero Section for Clients */}
       <section className="bg-slate-900 pt-32 pb-20 px-6 relative overflow-hidden">

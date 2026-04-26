@@ -1,8 +1,10 @@
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Check, ChevronRight, ChevronLeft, Save, 
   Camera, Sparkles, Search, Globe, 
-  Gauge, Info, AlertCircle, Eye, Zap, Trash2, X
+  Gauge, Info, AlertCircle, Eye, Zap, Trash2, X,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { toast } from 'react-hot-toast';

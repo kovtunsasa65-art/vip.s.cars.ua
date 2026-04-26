@@ -2,47 +2,51 @@ import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, Car, ShieldCheck, Users, 
   BarChart3, Globe, Brain, FileText, 
-  Settings, Image, LogOut, Menu, X 
+  Settings, Image, LogOut, Menu, X,
+  UserCircle, TrendingUp, Zap
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
 
-// Модулі
+// Модулі (Тимчасові заглушки або існуючі)
 import Dashboard from './Dashboard';
 import LeadsManager from './LeadsManager';
-import SeoManager from './SeoManager';
-import AnalyticsManager from './AnalyticsManager';
-import AiManager from './AiManager';
-import ContentManager from './ContentManager';
-import ModerationManager from './ModerationManager';
 import CarsManager from './CarsManager';
-import UsersManager from './UsersManager';
-import SettingsPanel from './SettingsPanel';
-import MediaLibrary from './MediaLibrary';
-import { Tab } from './types';
+import ModerationManager from './ModerationManager';
+
+// Тип для вкладок
+type Tab = 'dashboard' | 'cars' | 'leads' | 'moderation' | 'users' | 'seo' | 'analytics' | 'ai' | 'content' | 'settings';
 
 export default function AdminIndex() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [profile, setProfile] = useState<any>(null);
-  const [stats, setStats] = useState({ cars: [], leads: [] });
+  const [stats, setStats] = useState({ cars: 0, leads: 0 });
   const navigate = useNavigate();
 
   useEffect(() => {
     checkAuth();
-    fetchInitialData();
   }, []);
 
   const checkAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return navigate('/admin-login');
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
     setProfile(data);
   };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/admin-login');
+  };
+
   const menuItems = [
     { id: 'dashboard', label: 'Дашборд', icon: <BarChart3 size={20} /> },
     { id: 'cars', label: 'Авто', icon: <Car size={20} /> },
+    { id: 'moderation', label: 'Модерація', icon: <ShieldCheck size={20} />, badge: '2' },
     { id: 'leads', label: 'Ліди (CRM)', icon: <Users size={20} /> },
     { id: 'users', label: 'Користувачі', icon: <UserCircle size={20} /> },
     { id: 'seo', label: 'SEO', icon: <Globe size={20} /> },
@@ -57,16 +61,14 @@ export default function AdminIndex() {
       case 'dashboard': return <Dashboard />;
       case 'cars': return <CarsManager />;
       case 'leads': return <LeadsManager />;
-      case 'users': return <UsersManager />;
-      case 'seo': return <SeoManager />;
-      case 'analytics': return <AnalyticsManager />;
-      case 'ai': return <AiManager />;
-      case 'content': return <ContentManager />;
-      case 'settings': return <SettingsPanel />;
+      case 'moderation': return <ModerationManager />;
       default: return (
         <div className="flex flex-col items-center justify-center h-[60vh] text-slate-300">
-          <ShieldCheck size={64} className="mb-4 opacity-20" />
-          <p className="text-sm font-black uppercase tracking-[0.2em]">Розділ у розробці</p>
+          <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 border border-slate-100">
+             <ShieldCheck size={40} className="opacity-20" />
+          </div>
+          <p className="text-sm font-black uppercase tracking-[0.2em]">Розділ "{activeTab}" у розробці</p>
+          <p className="text-xs font-medium text-slate-400 mt-2">Ми працюємо над цим модулем</p>
         </div>
       );
     }
@@ -107,14 +109,14 @@ export default function AdminIndex() {
                 {item.icon}
               </div>
               {isSidebarOpen && <span className="truncate">{item.label}</span>}
-              {item.badge ? (
+              {item.badge && isSidebarOpen && (
                 <span className={cn(
                   "absolute right-2 text-[10px] font-black px-1.5 py-0.5 rounded-full",
                   activeTab === item.id ? "bg-white text-brand-blue" : "bg-brand-blue text-white"
                 )}>
                   {item.badge}
                 </span>
-              ) : null}
+              )}
             </button>
           ))}
         </nav>
@@ -128,29 +130,12 @@ export default function AdminIndex() {
             {isSidebarOpen && <span>Вийти</span>}
           </button>
         </div>
-      </aside>
+      </motion.aside>
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
         <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {activeTab === 'dashboard' && <Dashboard stats={stats} />}
-          {activeTab === 'moderation' && <ModerationManager />}
-          {activeTab === 'cars' && <CarsManager />}
-          {activeTab === 'leads' && <LeadsManager leads={stats.leads} onRefresh={fetchInitialData} profile={profile} />}
-          {activeTab === 'seo' && <SeoManager />}
-          {activeTab === 'analytics' && <AnalyticsManager cars={stats.cars} leads={stats.leads} />}
-          {activeTab === 'ai' && <AiManager />}
-          {activeTab === 'content' && <ContentManager />}
-          {activeTab === 'users' && <UsersManager />}
-          {activeTab === 'media' && <MediaLibrary />}
-          {activeTab === 'settings' && <SettingsPanel />}
-          {activeTab === 'cars' && (
-            <div className="p-12 text-center bg-white rounded-3xl border border-slate-200">
-              <Car size={48} className="mx-auto text-slate-200 mb-4" />
-              <h2 className="text-xl font-black text-slate-900">Каталог Авто</h2>
-              <p className="text-slate-500 mt-2">Функціонал управління каталогом у розробці або винесений в окремий модуль.</p>
-            </div>
-          )}
+           {renderContent()}
         </div>
       </main>
     </div>
