@@ -37,6 +37,7 @@ export default function SellCar() {
         model: formData.model,
         year: formData.year,
         price: Number(formData.price),
+        vin: formData.vin, // Додано VIN
         engine: formData.engine,
         transmission: formData.transmission,
         mileage: Number(formData.mileage),
