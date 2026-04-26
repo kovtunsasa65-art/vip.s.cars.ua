@@ -15,7 +15,7 @@ export default function LeadsManager({ leads, onRefresh, profile }: {
   const [noteText,       setNoteText]       = useState('');
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [dragLeadId,     setDragLeadId]     = useState<number | null>(null);
-  const [filter, setFilter] = useState({ search: '', score: '', type: '', source: '' });
+  const [filter, setFilter] = useState({ search: '', score: '', type: '', source: '', dateRange: 'all' });
 
   useEffect(() => {
     if (!selected) return;
@@ -27,13 +27,18 @@ export default function LeadsManager({ leads, onRefresh, profile }: {
   const updateLead = async (id: number, patch: any) => {
     const old = leads.find(l => l.id === id);
     await supabase.from('leads').update(patch).eq('id', id);
+    
     const events: any[] = [];
     if (patch.status && patch.status !== old?.status)
-      events.push({ lead_id: id, action: 'status_change', from_value: old?.status, to_value: patch.status, comment: `${old?.status} → ${patch.status}` });
+      events.push({ lead_id: id, action: 'status_change', from_value: old?.status, to_value: patch.status, comment: `Статус: ${old?.status} → ${patch.status}` });
     if (patch.score && patch.score !== old?.score)
       events.push({ lead_id: id, action: 'score_change', from_value: old?.score, to_value: patch.score, comment: `Score: ${old?.score} → ${patch.score}` });
+    if (patch.manager_id && patch.manager_id !== old?.manager_id)
+      events.push({ lead_id: id, action: 'manager_change', from_value: old?.manager_id, to_value: patch.manager_id, comment: `Призначено менеджера` });
+    
     if (events.length) await supabase.from('lead_history').insert(events);
     onRefresh();
+    
     if (selected?.id === id) {
       setSelected((p: any) => ({ ...p, ...patch }));
       const { data } = await supabase.from('lead_history').select('*').eq('lead_id', id).order('created_at', { ascending: true });
@@ -50,9 +55,21 @@ export default function LeadsManager({ leads, onRefresh, profile }: {
   };
 
   const assignToMe = async () => {
-    if (!selected || !profile?.id) return;
+    if (!selected || !profile?.id) {
+      toast.error('Ви не авторизовані як менеджер');
+      return;
+    }
     await updateLead(selected.id, { manager_id: profile.id });
-    toast.success('Призначено вам');
+    toast.success('Лід призначений вам');
+  };
+
+  const getTimeSince = (date: string) => {
+    const diff = Date.now() - new Date(date).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}хв`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}г`;
+    return `${Math.floor(hours / 24)}д`;
   };
 
   const slaBreached = (l: any) =>
@@ -63,6 +80,14 @@ export default function LeadsManager({ leads, onRefresh, profile }: {
     if (filter.score  && l.score  !== filter.score)  return false;
     if (filter.type   && l.type   !== filter.type)   return false;
     if (filter.source && l.source !== filter.source) return false;
+    
+    if (filter.dateRange !== 'all') {
+      const date = new Date(l.created_at);
+      const now = new Date();
+      if (filter.dateRange === 'today' && date.toDateString() !== now.toDateString()) return false;
+      if (filter.dateRange === 'week' && (now.getTime() - date.getTime()) > 7 * 24 * 60 * 60 * 1000) return false;
+    }
+    
     return true;
   });
 
@@ -70,55 +95,83 @@ export default function LeadsManager({ leads, onRefresh, profile }: {
   const sources = [...new Set(leads.map(l => l.source).filter(Boolean))] as string[];
 
   return (
-    <div className="flex gap-4 h-full min-h-[600px]">
+    <div className="flex gap-4 h-full min-h-[700px] flex-col lg:flex-row">
       <div className="flex-1 min-w-0 space-y-4">
-        {/* Toolbar */}
-        <div className="flex items-center gap-3 flex-wrap shrink-0">
-          <h1 className="text-xl font-black text-slate-900 mr-2">CRM / Ліди</h1>
-          <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={filter.search} onChange={e => setFilter(f => ({ ...f, search: e.target.value }))}
-              placeholder="Ім'я або телефон..."
-              className="pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:border-brand-blue focus:outline-none w-44" />
+        {/* Header & Filters */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-brand-blue/10 rounded-xl flex items-center justify-center text-brand-blue">
+                <Users size={20} />
+              </div>
+              <div>
+                <h1 className="text-lg font-black text-slate-900">Kanban CRM</h1>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Управління лідами та продажами</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-bold">{filtered.length} лідів знайдено</span>
+              <button onClick={onRefresh} className="p-2 text-slate-400 hover:text-brand-blue transition-colors bg-slate-50 rounded-lg">
+                <RefreshCw size={16} />
+              </button>
+            </div>
           </div>
-          <select value={filter.score} onChange={e => setFilter(f => ({ ...f, score: e.target.value }))}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none">
-            <option value="">Score: всі</option>
-            {LEAD_SCORES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select value={filter.type} onChange={e => setFilter(f => ({ ...f, type: e.target.value }))}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none">
-            <option value="">Тип: всі</option>
-            {types.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select value={filter.source} onChange={e => setFilter(f => ({ ...f, source: e.target.value }))}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none">
-            <option value="">Джерело: всі</option>
-            {sources.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-semibold">{filtered.length} лідів</span>
-            <button onClick={onRefresh} className="p-2 text-slate-400 hover:text-brand-blue transition-colors"><RefreshCw size={15} /></button>
+
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                value={filter.search} 
+                onChange={e => setFilter(f => ({ ...f, search: e.target.value }))}
+                placeholder="Пошук за ім'ям або телефоном..."
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:border-brand-blue outline-none transition-all" 
+              />
+            </div>
+            <select value={filter.dateRange} onChange={e => setFilter(f => ({ ...f, dateRange: e.target.value }))}
+              className="px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none outline-none">
+              <option value="all">Весь час</option>
+              <option value="today">Сьогодні</option>
+              <option value="week">За тиждень</option>
+            </select>
+            <select value={filter.score} onChange={e => setFilter(f => ({ ...f, score: e.target.value }))}
+              className="px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none">
+              <option value="">Всі Score</option>
+              {LEAD_SCORES.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+            </select>
+            <select value={filter.type} onChange={e => setFilter(f => ({ ...f, type: e.target.value }))}
+              className="px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none">
+              <option value="">Всі Типи</option>
+              {types.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
         </div>
 
-        {/* Kanban board */}
-        <div className="flex gap-3 overflow-x-auto pb-4">
+        {/* Kanban Board */}
+        <div className="flex gap-4 overflow-x-auto pb-6 custom-scrollbar">
           {KANBAN_COLS.map(col => {
             const colLeads = filtered.filter(l => (l.status || 'новий') === col.key);
             return (
               <div key={col.key}
                 onDragOver={e => e.preventDefault()}
-                onDrop={() => { if (dragLeadId !== null) { updateLead(dragLeadId, { status: col.key }); setDragLeadId(null); } }}
-                className={cn('w-64 shrink-0 flex flex-col rounded-2xl border overflow-hidden', col.colBg, col.border)}>
-                <div className="px-4 py-3 border-b border-current/10 flex items-center justify-between bg-white/50">
+                onDrop={() => { 
+                  if (dragLeadId !== null) { 
+                    updateLead(dragLeadId, { status: col.key }); 
+                    setDragLeadId(null); 
+                  } 
+                }}
+                className={cn('w-72 shrink-0 flex flex-col rounded-2xl border overflow-hidden transition-colors', col.colBg, col.border)}>
+                
+                <div className="px-4 py-3 border-b border-current/10 flex items-center justify-between bg-white/60 backdrop-blur-md">
                   <div className="flex items-center gap-2">
-                    <div className={cn('w-2 h-2 rounded-full', col.dot)} />
-                    <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">{col.label}</span>
+                    <div className={cn('w-2 h-2 rounded-full shadow-sm', col.dot)} />
+                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">{col.label}</span>
                   </div>
-                  <span className="text-[10px] font-black bg-white/80 px-2 py-0.5 rounded-full border border-white">{colLeads.length}</span>
+                  <span className="text-[10px] font-black bg-white/80 px-2 py-0.5 rounded-full border border-white/50 text-slate-500">
+                    {colLeads.length}
+                  </span>
                 </div>
-                <div className="p-2.5 flex-1 space-y-2 overflow-y-auto max-h-[calc(100vh-260px)]">
+
+                <div className="p-3 flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-280px)] custom-scrollbar">
                   {colLeads.map(l => {
                     const sla = slaBreached(l);
                     return (
@@ -127,28 +180,55 @@ export default function LeadsManager({ leads, onRefresh, profile }: {
                         onDragStart={() => setDragLeadId(l.id)}
                         onClick={() => setSelected(l)}
                         className={cn(
-                          'bg-white p-3 rounded-xl border shadow-sm cursor-pointer select-none transition-all hover:shadow-md hover:border-brand-blue',
+                          'bg-white p-4 rounded-xl border shadow-sm cursor-pointer select-none transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5',
                           selected?.id === l.id ? 'ring-2 ring-brand-blue border-transparent' : 'border-slate-200',
-                          sla && 'border-red-300 bg-red-50/60',
-                          dragLeadId === l.id && 'opacity-50'
+                          sla && 'border-red-200 bg-red-50/30',
+                          dragLeadId === l.id && 'opacity-40 grayscale-[0.5]'
                         )}>
-                        <div className="flex justify-between items-start mb-2">
-                          <span className={cn('text-[9px] font-black px-1.5 py-0.5 rounded-full border uppercase', SCORE_COLOR[l.score] ?? 'bg-slate-100 text-slate-400 border-slate-200')}>
-                            {l.score || '—'}
+                        
+                        <div className="flex justify-between items-start mb-3">
+                          <span className={cn('text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider', 
+                            SCORE_COLOR[l.score] || 'bg-slate-100 text-slate-500 border-slate-200')}>
+                            {l.score || 'холодний'}
                           </span>
-                          <span className="text-[9px] text-slate-400">{l.created_at ? format(new Date(l.created_at), 'dd.MM HH:mm') : ''}</span>
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold">
+                            <Clock size={10} />
+                            {getTimeSince(l.created_at)}
+                          </div>
                         </div>
-                        <div className="font-black text-slate-900 text-sm leading-tight truncate">{l.name}</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">{l.phone}</div>
-                        {l.budget && <div className="text-[10px] text-slate-400 mt-1">💰 {l.budget}</div>}
-                        {l.type   && <div className="text-[10px] text-brand-blue font-semibold mt-0.5">{l.type}</div>}
-                        {sla && <div className="mt-2 text-[9px] bg-red-100 text-red-600 font-black px-2 py-0.5 rounded-full w-fit">⚠ SLA &gt;15хв</div>}
+
+                        <div className="font-black text-slate-900 text-sm leading-tight mb-1 group-hover:text-brand-blue transition-colors">
+                          {l.name || 'Анонімний клієнт'}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium mb-3">{l.phone}</div>
+
+                        <div className="space-y-1.5">
+                          {l.budget && (
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-600 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                              <span className="opacity-50">Бюджет:</span>
+                              <span className="font-black">{l.budget}</span>
+                            </div>
+                          )}
+                          {l.type && (
+                            <div className="text-[9px] font-black text-brand-blue uppercase tracking-widest px-2 py-0.5 bg-brand-blue/5 rounded-md w-fit">
+                              {l.type}
+                            </div>
+                          )}
+                        </div>
+
+                        {sla && (
+                          <div className="mt-4 flex items-center gap-1.5 py-1.5 px-2 bg-red-500/10 text-red-600 rounded-lg animate-pulse">
+                            <AlertCircle size={12} />
+                            <span className="text-[9px] font-black uppercase tracking-widest">SLA Порушено (>15хв)</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
+                  
                   {colLeads.length === 0 && (
-                    <div className="h-14 border-2 border-dashed border-current/20 rounded-xl flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      Перетягніть
+                    <div className="h-20 border-2 border-dashed border-current/10 rounded-2xl flex flex-col items-center justify-center text-[10px] font-black text-slate-400 uppercase tracking-widest gap-2 opacity-50">
+                      <span>Пусто</span>
                     </div>
                   )}
                 </div>
@@ -158,116 +238,146 @@ export default function LeadsManager({ leads, onRefresh, profile }: {
         </div>
       </div>
 
-      {/* Detail panel */}
-      {selected && (
-        <aside className="w-[360px] shrink-0 bg-white rounded-2xl border border-slate-200 shadow-xl self-start sticky top-24 max-h-[calc(100vh-130px)] flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
-            <div>
-              <h2 className="font-black text-slate-900 text-sm">Лід #{selected.id}</h2>
-              <div className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                {selected.created_at ? format(new Date(selected.created_at), 'dd MMM yyyy, HH:mm') : ''}
+      {/* Detail Panel (Slide-in) */}
+      <AnimatePresence>
+        {selected && (
+          <motion.aside 
+            initial={{ x: 400, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 400, opacity: 0 }}
+            className="w-full lg:w-[400px] shrink-0 bg-white rounded-3xl border border-slate-200 shadow-2xl self-start sticky top-4 lg:top-24 max-h-[calc(100vh-120px)] flex flex-col overflow-hidden z-[60]"
+          >
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-brand-blue border border-slate-100">
+                  <User size={20} />
+                </div>
+                <div>
+                  <h2 className="font-black text-slate-900 text-sm">Картка ліда</h2>
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">#{selected.id} · {format(new Date(selected.created_at), 'dd.MM.yyyy')}</div>
+                </div>
               </div>
-            </div>
-            <button onClick={() => setSelected(null)} className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400"><X size={16} /></button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            <div className="space-y-3">
-              <div className="text-lg font-black text-slate-900 leading-tight">{selected.name}</div>
-              <div className="flex flex-wrap gap-2">
-                <a href={`tel:${selected.phone}`} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-bold hover:bg-green-600 transition-colors">
-                  <Phone size={12} /> Дзвінок
-                </a>
-                <a href={`https://t.me/+${selected.phone?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors">
-                  <Send size={12} /> Telegram
-                </a>
-                {selected.email && (
-                  <a href={`mailto:${selected.email}`} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors">
-                    <MessageCircle size={12} /> Email
-                  </a>
-                )}
-                <button onClick={assignToMe} className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue/10 text-brand-blue rounded-lg text-xs font-bold hover:bg-brand-blue hover:text-white transition-colors">
-                  <User size={12} /> Мені
-                </button>
-              </div>
-            </div>
-
-            {slaBreached(selected) && (
-              <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-600 font-bold">
-                ⚠ SLA порушено — відповідь не надіслана більше 15 хвилин
-              </div>
-            )}
-
-            <div className="bg-slate-50 rounded-xl p-4 space-y-2.5 text-sm">
-              <Row label="Телефон"      value={selected.phone} />
-              <Row label="Тип"          value={selected.type} />
-              <Row label="Бюджет"       value={selected.budget || '—'} />
-              <Row label="Джерело"      value={selected.source || '—'} />
-              {selected.car_id  && <Row label="Авто"         value={`ID: ${selected.car_id}`} />}
-              {selected.message && <Row label="Повідомлення" value={selected.message} />}
-            </div>
-
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Score</label>
-              <div className="flex gap-2">
-                {LEAD_SCORES.map(s => (
-                  <button key={s} onClick={() => updateLead(selected.id, { score: s })}
-                    className={cn('flex-1 py-2 rounded-xl text-[10px] font-black uppercase border transition-all',
-                      SCORE_COLOR[s] ?? '',
-                      (selected.score || 'холодний') === s ? 'ring-2 ring-offset-1 ring-current opacity-100' : 'opacity-50 hover:opacity-80')}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Статус / Колонка</label>
-              <select value={selected.status || 'новий'} onChange={e => updateLead(selected.id, { status: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:border-brand-blue focus:outline-none">
-                {KANBAN_COLS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Додати нотатку</label>
-              <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={3}
-                placeholder="Коментар, результат дзвінка..."
-                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs outline-none focus:ring-2 focus:ring-brand-blue/10 resize-none" />
-              <button onClick={addNote} disabled={!noteText.trim()}
-                className="w-full mt-2 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40 hover:bg-slate-800 transition-colors">
-                Зберегти
+              <button onClick={() => setSelected(null)} className="p-2 hover:bg-white hover:shadow-md rounded-xl text-slate-400 transition-all">
+                <X size={18} />
               </button>
             </div>
 
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Часова лінія</label>
-              {loadingHistory && <div className="text-center text-xs text-slate-300 animate-pulse py-2">Завантаження...</div>}
-              <div className="space-y-3 relative before:absolute before:left-3 before:top-0 before:bottom-0 before:w-0.5 before:bg-slate-100">
-                {history.map(h => (
-                  <div key={h.id} className="pl-8 relative">
-                    <div className={cn('absolute left-[9px] top-1.5 w-2.5 h-2.5 rounded-full ring-2 ring-white',
-                      h.action === 'status_change' ? 'bg-orange-400' : h.action === 'score_change' ? 'bg-purple-400' : 'bg-brand-blue')} />
-                    <div className="text-[9px] text-slate-400 font-semibold mb-0.5">{format(new Date(h.created_at), 'dd MMM, HH:mm')}</div>
-                    <div className="text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 leading-relaxed">
-                      {(h.action === 'status_change' || h.action === 'score_change') ? (
-                        <div className="flex items-center gap-1.5 font-medium">
-                          <span className="text-slate-400 line-through">{h.from_value}</span>
-                          <ChevronRight size={10} className="text-slate-300" />
-                          <span className="font-black text-slate-900">{h.to_value}</span>
-                        </div>
-                      ) : h.comment}
-                    </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+              <div className="space-y-4">
+                <div className="text-xl font-black text-slate-900 tracking-tight leading-tight">{selected.name}</div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <a href={`tel:${selected.phone}`} className="flex items-center justify-center gap-2 py-3 bg-green-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-green-600 transition-all shadow-lg shadow-green-500/20">
+                    <Phone size={14} /> Дзвінок
+                  </a>
+                  <a href={`https://t.me/+${selected.phone?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 py-3 bg-blue-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-blue-500/20">
+                    <Send size={14} /> Telegram
+                  </a>
+                  {selected.email && (
+                    <a href={`mailto:${selected.email}`} className="flex items-center justify-center gap-2 py-3 bg-slate-800 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-900 transition-all col-span-2">
+                      <MessageCircle size={14} /> Надіслати Email
+                    </a>
+                  )}
+                  <button onClick={assignToMe} className="flex items-center justify-center gap-2 py-3 bg-brand-blue/10 text-brand-blue rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-blue hover:text-white transition-all col-span-2 border border-brand-blue/20">
+                    <User size={14} /> Призначити мені
+                  </button>
+                </div>
+              </div>
+
+              {slaBreached(selected) && (
+                <div className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-center gap-3">
+                  <div className="w-8 h-8 bg-red-500 text-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20">
+                    <AlertCircle size={18} />
                   </div>
-                ))}
-                {history.length === 0 && !loadingHistory && (
-                  <div className="pl-8 text-xs text-slate-300 font-semibold">Подій ще немає</div>
+                  <div className="text-xs text-red-600 font-bold leading-snug">
+                    SLA порушено! Лід без відповіді більше 15 хвилин.
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                <div className="space-y-0.5">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Бюджет</div>
+                  <div className="text-sm font-black text-slate-900">{selected.budget || '—'}</div>
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Тип</div>
+                  <div className="text-sm font-black text-slate-900">{selected.type}</div>
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Джерело</div>
+                  <div className="text-sm font-black text-slate-900">{selected.source || 'Прямий'}</div>
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Авто ID</div>
+                  <div className="text-sm font-black text-brand-blue">{selected.car_id || '—'}</div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Якість ліда (Score)</label>
+                <div className="flex gap-2">
+                  {LEAD_SCORES.map(s => (
+                    <button key={s} onClick={() => updateLead(selected.id, { score: s })}
+                      className={cn('flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase border transition-all',
+                        SCORE_COLOR[s] || '',
+                        (selected.score || 'холодний') === s ? 'ring-2 ring-offset-2 ring-current opacity-100' : 'opacity-40 grayscale hover:opacity-100 hover:grayscale-0')}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Швидка нотатка</label>
+                <div className="relative">
+                  <textarea 
+                    value={noteText} 
+                    onChange={e => setNoteText(e.target.value)} 
+                    rows={3}
+                    placeholder="Напишіть результат дзвінка чи важливу деталь..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-medium outline-none focus:ring-4 focus:ring-brand-blue/5 focus:bg-white focus:border-brand-blue/20 transition-all resize-none" 
+                  />
+                  <button 
+                    onClick={addNote} 
+                    disabled={!noteText.trim()}
+                    className="absolute right-3 bottom-3 p-2 bg-slate-900 text-white rounded-xl disabled:opacity-30 hover:scale-105 active:scale-95 transition-all"
+                  >
+                    <Send size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4 pb-4">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">Історія змін (Timeline)</label>
+                {loadingHistory ? (
+                  <div className="space-y-3">
+                    {[1,2].map(i => <div key={i} className="h-12 bg-slate-50 rounded-xl animate-pulse" />)}
+                  </div>
+                ) : (
+                  <div className="space-y-4 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-px before:bg-slate-100">
+                    {history.map(h => (
+                      <div key={h.id} className="pl-8 relative">
+                        <div className={cn('absolute left-[9px] top-1.5 w-2 h-2 rounded-full ring-4 ring-white',
+                          h.action === 'status_change' ? 'bg-orange-500' : h.action === 'score_change' ? 'bg-purple-500' : 'bg-brand-blue')} 
+                        />
+                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                          <div className="flex justify-between items-center mb-1">
+                            <div className="text-[9px] font-black text-slate-400 uppercase">{format(new Date(h.created_at), 'dd MMM, HH:mm')}</div>
+                            <div className="text-[9px] font-black text-brand-blue uppercase">{h.action?.replace('_', ' ')}</div>
+                          </div>
+                          <div className="text-xs text-slate-700 font-medium leading-relaxed">{h.comment}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {history.length === 0 && <div className="text-xs text-slate-400 italic pl-8">Історія поки порожня</div>}
+                  </div>
                 )}
               </div>
             </div>
-          </div>
-        </aside>
-      )}
+          </motion.aside>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
