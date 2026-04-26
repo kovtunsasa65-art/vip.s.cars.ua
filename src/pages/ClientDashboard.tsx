@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Heart, Eye, Bell, LogOut, Phone, ChevronRight, X, Star, Car } from 'lucide-react';
+import { Heart, Eye, Bell, LogOut, Phone, ChevronRight, X, Star, Car, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { PHONE_RAW } from '../lib/config';
 import SEOHead from '../components/SEOHead';
 
-type Tab = 'favorites' | 'viewed' | 'subscriptions' | 'leads';
+type Tab = 'favorites' | 'viewed' | 'my_cars' | 'subscriptions' | 'leads';
 
 const STATUS_COLOR: Record<string, string> = {
   новий:     'bg-blue-100 text-blue-700',
@@ -59,11 +59,19 @@ export default function ClientDashboard() {
       const { data: mine } = await supabase
         .from('cars')
         .select('*')
-        .eq('user_id', user.id) // Переконайтеся, що в таблиці cars є поле user_id
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       setMyCars(mine ?? []);
 
-      // 4. Мої заявки
+      // 4. Завантажуємо Підписки
+      const { data: subs } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+      setProfile((prev: any) => ({ ...prev, subscriptions: subs ?? [] }));
+
+      // 5. Мої заявки
       const userPhone = p?.phone || user.phone;
       if (userPhone) {
         const { data: l } = await supabase
@@ -77,6 +85,25 @@ export default function ClientDashboard() {
       setLoading(false);
     })();
   }, [navigate]);
+
+  async function removeFavorite(carId: number) {
+    await supabase.from('user_favorites').delete().eq('user_id', user.id).eq('car_id', carId);
+    setFavorites(f => f.filter(c => c.id !== carId));
+  }
+
+  async function removeSubscription(subId: string | number) {
+    await supabase.from('subscriptions').update({ is_active: false }).eq('id', subId);
+    setProfile((p: any) => ({
+      ...p,
+      subscriptions: p.subscriptions.filter((s: any) => s.id !== subId)
+    }));
+  }
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin w-8 h-8 border-2 border-brand-blue border-t-transparent rounded-full"/>
+    </div>
+  );
 
   const tabs = [
     { id: 'favorites',     label: 'Обране',    icon: <Heart size={15}/>,    count: favorites.length },
@@ -107,12 +134,17 @@ export default function ClientDashboard() {
                 <p className="text-sm text-slate-400">{user?.email ?? user?.phone}</p>
               </div>
             </div>
-            <button
-              onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
-              className="flex items-center gap-2 text-sm text-slate-400 hover:text-red-500 transition-colors"
-            >
-              <LogOut size={15}/> Вийти
-            </button>
+            <div className="flex items-center gap-4">
+              <Link to="/sell" className="hidden md:flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg shadow-brand-blue/20">
+                <Plus size={14} /> Додати авто
+              </Link>
+              <button
+                onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-red-500 transition-colors"
+              >
+                <LogOut size={15}/> Вийти
+              </button>
+            </div>
           </div>
 
           {/* Таби */}
@@ -174,7 +206,7 @@ export default function ClientDashboard() {
                  </Link>
               </div>
 
-              {myCars.length > 0 && (
+              {myCars.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4">
                    {myCars.map(car => (
                      <div key={car.id} className="bg-white p-4 rounded-2xl border border-slate-200 flex items-center gap-4 group">
@@ -188,18 +220,18 @@ export default function ClientDashboard() {
                         <div className="text-right">
                            <span className={cn(
                              "text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border",
-                             car.status === 'available' ? "bg-green-50 text-green-600 border-green-100" :
+                             car.status === 'active' ? "bg-green-50 text-green-600 border-green-100" :
                              car.status === 'moderation' ? "bg-amber-50 text-amber-600 border-amber-100" :
                              "bg-slate-100 text-slate-500 border-slate-200"
                            )}>
-                             {car.status === 'moderation' ? 'На перевірці' : car.status}
+                             {car.status === 'moderation' ? 'На перевірці' : car.status === 'active' ? 'Активно' : car.status}
                            </span>
                            <div className="text-[8px] text-slate-400 font-bold uppercase mt-1">Оновлено {new Date(car.updated_at).toLocaleDateString()}</div>
                         </div>
                      </div>
                    ))}
                 </div>
-              )}
+              ) : null}
             </div>
           )}
 
@@ -211,7 +243,7 @@ export default function ClientDashboard() {
                 <EmptyState icon={<Bell size={32}/>} text="Підписок немає" sub="Налаштуйте підписку щоб отримувати авто в Telegram" />
               ) : (
                 <div className="space-y-3">
-                  {(profile.subscriptions as any[]).map((s: any) => (
+                   {(profile.subscriptions as any[]).map((s: any) => (
                     <div key={s.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
                       <div className="space-y-1">
                         <div className="text-sm font-black text-slate-800">
@@ -233,14 +265,6 @@ export default function ClientDashboard() {
                   ))}
                 </div>
               )}
-              <div className="mt-5 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                <p className="text-sm font-semibold text-blue-700 mb-1">Отримуйте авто в Telegram</p>
-                <p className="text-xs text-blue-500 mb-3">Нові оголошення — одразу в особисті повідомлення</p>
-                <a href="https://t.me/VipsCarsAlertsBot" target="_blank" rel="noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-bold hover:bg-blue-600 transition-colors w-fit">
-                  Підключити Telegram →
-                </a>
-              </div>
             </div>
           )}
 
