@@ -6,11 +6,24 @@
     <title>VIP.S CARS — Автопідбір та викуп авто в Києві</title>
     <meta name="description" content="Підберемо авто без ризику або викупимо за 1 день. Перевірені авто з Індексом Довіри. Київ." />
     <meta name="theme-color" content="#0D0D0D" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW registered'))
+            .catch(err => console.log('SW error', err));
+        });
+      }
+    </script>
   </body>
 </html>

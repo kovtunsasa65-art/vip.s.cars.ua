@@ -38,6 +38,7 @@ import Oferta from './pages/Oferta';
 import ServerError from './pages/ServerError';
 import Maintenance from './pages/Maintenance';
 import ProtectedRoute from './components/ProtectedRoute';
+import InstallPWA from './components/InstallPWA';
 
 function HomePage() {
   return (
@@ -126,6 +127,7 @@ export default function App() {
                 <Route path="*"           element={<NotFoundPage />} />
               </Routes>
             </AnimatePresence>
+            <InstallPWA />
 
             <Footer />
 
