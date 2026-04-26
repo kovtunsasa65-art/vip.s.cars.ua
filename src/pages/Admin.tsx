@@ -1828,6 +1828,16 @@ export default function Admin() {
   }, [uSearch, cars, leads]);
 
   useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) setIsSidebarOpen(false);
+      else setIsSidebarOpen(true);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
     loadData();
     const ch = supabase.channel('admin').on('postgres_changes' as any, { event: '*', schema: 'public', table: 'leads' }, loadData).on('postgres_changes' as any, { event: '*', schema: 'public', table: 'cars' }, loadData).subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -1836,12 +1846,29 @@ export default function Admin() {
   const newLeads = leads.filter(l => (l.status || 'новий') === 'новий').length;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex overflow-hidden">
-      <aside className={cn("bg-white border-r border-slate-200 transition-all duration-300 flex flex-col z-50", isSidebarOpen ? "w-64" : "w-20")}>
+    <div className="min-h-screen bg-[#F8FAFC] flex relative overflow-hidden">
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[45] lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      <aside className={cn(
+        "bg-white border-r border-slate-200 transition-all duration-300 flex flex-col z-50",
+        "fixed inset-y-0 left-0 lg:relative lg:translate-x-0",
+        isSidebarOpen ? "w-64 translate-x-0" : "w-20 -translate-x-full lg:translate-x-0 lg:w-20"
+      )}>
         <div className="h-16 flex items-center px-6 border-b border-slate-50 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-brand-blue rounded-lg flex items-center justify-center text-white font-black text-sm shadow-lg shadow-brand-blue/30">V</div>
-            {isSidebarOpen && <div className="font-black text-slate-900 tracking-tighter text-lg">vip.s.cars.ua</div>}
+            {(isSidebarOpen || window.innerWidth < 1024) && <div className="font-black text-slate-900 tracking-tighter text-lg">vip.s.cars.ua</div>}
           </div>
         </div>
         <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto custom-scrollbar">
@@ -1868,7 +1895,7 @@ export default function Admin() {
       </aside>
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-40">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0 z-40">
           <div className="flex items-center gap-6 flex-1">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400"><Menu size={20} /></button>
             <div className="flex items-center gap-2 text-sm">
@@ -1958,7 +1985,7 @@ export default function Admin() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#F8FAFC]">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar bg-[#F8FAFC]">
           {loading ? (
             <div className="flex items-center justify-center h-full"><div className="animate-spin w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full" /></div>
           ) : (
