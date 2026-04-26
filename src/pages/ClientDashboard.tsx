@@ -21,6 +21,7 @@ export default function ClientDashboard() {
   const [profile, setProfile]   = useState<any>(null);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [viewed, setViewed]     = useState<any[]>([]);
+  const [myCars, setMyCars]     = useState<any[]>([]);
   const [leads, setLeads]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const navigate = useNavigate();
@@ -39,31 +40,30 @@ export default function ClientDashboard() {
       }
       setProfile(p);
 
-      // 1. Завантажуємо Обране (через нову таблицю)
+      // 1. Завантажуємо Обране
       const { data: favs } = await supabase
         .from('user_favorites')
-        .select('car_id, cars(*, car_images(url, is_cover))')
+        .select('car_id, cars(*)')
         .eq('user_id', user.id);
       setFavorites(favs?.map(f => f.cars).filter(Boolean) ?? []);
 
-      // 2. Завантажуємо Переглянуті (через нову таблицю)
+      // 2. Завантажуємо Переглянуті
       const { data: views } = await supabase
         .from('user_views')
-        .select('car_id, viewed_at, cars(*, car_images(url, is_cover))')
+        .select('car_id, viewed_at, cars(*)')
         .eq('user_id', user.id)
-        .order('viewed_at', { ascending: false })
-        .limit(20);
+        .order('viewed_at', { ascending: false });
       setViewed(views?.map(v => v.cars).filter(Boolean) ?? []);
 
-      // 3. Завантажуємо Підписки
-      const { data: subs } = await supabase
-        .from('subscriptions')
+      // 3. Завантажуємо Мої авто
+      const { data: mine } = await supabase
+        .from('cars')
         .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true);
-      setProfile((prev: any) => ({ ...prev, subscriptions: subs ?? [] }));
+        .eq('user_id', user.id) // Переконайтеся, що в таблиці cars є поле user_id
+        .order('created_at', { ascending: false });
+      setMyCars(mine ?? []);
 
-      // 4. Мої заявки — телефон беремо з профілю, бо user.phone є тільки при phone-auth
+      // 4. Мої заявки
       const userPhone = p?.phone || user.phone;
       if (userPhone) {
         const { data: l } = await supabase
@@ -78,28 +78,10 @@ export default function ClientDashboard() {
     })();
   }, [navigate]);
 
-  async function removeFavorite(carId: number) {
-    await supabase.from('user_favorites').delete().eq('user_id', user.id).eq('car_id', carId);
-    setFavorites(f => f.filter(c => c.id !== carId));
-  }
-
-  async function removeSubscription(subId: string | number) {
-    await supabase.from('subscriptions').update({ is_active: false }).eq('id', subId);
-    setProfile((p: any) => ({
-      ...p,
-      subscriptions: p.subscriptions.filter((s: any) => s.id !== subId)
-    }));
-  }
-
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin w-8 h-8 border-2 border-brand-blue border-t-transparent rounded-full"/>
-    </div>
-  );
-
   const tabs = [
     { id: 'favorites',     label: 'Обране',    icon: <Heart size={15}/>,    count: favorites.length },
-    { id: 'viewed',        label: 'Переглянуті', icon: <Eye size={15}/>,   count: viewed.length },
+    { id: 'viewed',        label: 'Перегляди', icon: <Eye size={15}/>,   count: viewed.length },
+    { id: 'my_cars',       label: 'Мої авто',  icon: <Car size={15}/>,      count: myCars.length },
     { id: 'subscriptions', label: 'Підписки',  icon: <Bell size={15}/>,     count: (profile?.subscriptions ?? []).length },
     { id: 'leads',         label: 'Заявки',    icon: <Star size={15}/>,     count: leads.length },
   ] as const;
@@ -173,6 +155,49 @@ export default function ClientDashboard() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {viewed.map(car => <CarMiniCard key={car.id} car={car} />)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Мої Авто */}
+          {tab === 'my_cars' && (
+            <div className="space-y-6">
+              <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm text-center">
+                 <div className="w-16 h-16 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Car size={32} />
+                 </div>
+                 <h3 className="text-lg font-black text-slate-900 mb-2">Хочете продати своє авто?</h3>
+                 <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">Заповніть форму, і ми знайдемо покупця для вашого VIP автомобіля.</p>
+                 <Link to="/sell" className="inline-flex items-center gap-2 px-8 py-3.5 bg-brand-blue text-white rounded-2xl font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg shadow-brand-blue/20">
+                    + Додати авто
+                 </Link>
+              </div>
+
+              {myCars.length > 0 && (
+                <div className="grid grid-cols-1 gap-4">
+                   {myCars.map(car => (
+                     <div key={car.id} className="bg-white p-4 rounded-2xl border border-slate-200 flex items-center gap-4 group">
+                        <div className="w-24 h-16 bg-slate-100 rounded-xl overflow-hidden shrink-0">
+                           <img src={car.images?.[0] || 'https://via.placeholder.com/100'} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                           <div className="font-black text-slate-900 text-sm truncate">{car.make} {car.model}</div>
+                           <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{car.year} · ${car.price?.toLocaleString()}</div>
+                        </div>
+                        <div className="text-right">
+                           <span className={cn(
+                             "text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border",
+                             car.status === 'available' ? "bg-green-50 text-green-600 border-green-100" :
+                             car.status === 'moderation' ? "bg-amber-50 text-amber-600 border-amber-100" :
+                             "bg-slate-100 text-slate-500 border-slate-200"
+                           )}>
+                             {car.status === 'moderation' ? 'На перевірці' : car.status}
+                           </span>
+                           <div className="text-[8px] text-slate-400 font-bold uppercase mt-1">Оновлено {new Date(car.updated_at).toLocaleDateString()}</div>
+                        </div>
+                     </div>
+                   ))}
                 </div>
               )}
             </div>
