@@ -1006,13 +1006,28 @@ function SettingsPanel() {
   const [settings, setSettings] = useState({ phone: PHONE_RAW, telegram: '@vips_cars', pwa_prompt_enabled: true });
 
   useEffect(() => {
-    supabase.from('site_settings').select('*').eq('key', 'pwa_prompt_enabled').maybeSingle()
-      .then(({ data }) => { if (data) setSettings(s => ({ ...s, pwa_prompt_enabled: data.value === 'true' })); });
+    async function loadSettings() {
+      const { data } = await supabase.from('site_settings').select('*');
+      if (data) {
+        const s: any = { ...settings };
+        data.forEach(item => {
+          if (item.key === 'pwa_prompt_enabled') s.pwa_prompt_enabled = item.value === 'true';
+          if (item.key === 'site_phone') s.phone = item.value;
+          if (item.key === 'site_telegram') s.telegram = item.value;
+        });
+        setSettings(s);
+      }
+    }
+    loadSettings();
   }, []);
 
   const save = async () => {
     setSaved(true);
-    await supabase.from('site_settings').upsert({ key: 'pwa_prompt_enabled', value: String(settings.pwa_prompt_enabled) });
+    await Promise.all([
+      supabase.from('site_settings').upsert({ key: 'pwa_prompt_enabled', value: String(settings.pwa_prompt_enabled) }),
+      supabase.from('site_settings').upsert({ key: 'site_phone', value: settings.phone }),
+      supabase.from('site_settings').upsert({ key: 'site_telegram', value: settings.telegram })
+    ]);
     setTimeout(() => setSaved(false), 2000);
   };
 
