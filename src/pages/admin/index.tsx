@@ -58,7 +58,7 @@ export default function AdminIndex() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard />;
+      case 'dashboard': return <Dashboard setTab={setActiveTab} leads={[]} cars={[]} stats={{}} aiLogsCount={47} />;
       case 'cars': return <CarsManager />;
       case 'leads': return <LeadsManager />;
       case 'moderation': return <ModerationManager />;
