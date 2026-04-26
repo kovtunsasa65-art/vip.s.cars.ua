@@ -114,7 +114,29 @@ export default function Login() {
             {loading ? <Loader2 className="animate-spin" size={18} /> : (isSignUp ? 'Зареєструватися' : 'Увійти')}
           </button>
 
-          <button type="button" onClick={() => setIsSignUp(!isSignUp)} className="w-full text-center text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-brand-blue mt-6 transition-colors">
+          <div className="relative flex items-center justify-center my-8">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
+            <span className="relative px-4 bg-white text-[10px] font-black text-slate-300 uppercase tracking-widest">Або через</span>
+          </div>
+
+          <button 
+            type="button"
+            onClick={async () => {
+              const { error } = await supabase.auth.signInWithOAuth({ 
+                provider: 'telegram',
+                options: { redirectTo: window.location.origin + '/dashboard' }
+              });
+              if (error) toast.error(error.message);
+            }}
+            className="w-full bg-[#0088cc] text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-[#0077b5] transition-all shadow-lg shadow-[#0088cc]/20 flex items-center justify-center gap-3"
+          >
+            <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.36-.97.53-1.35.52-.42-.01-1.23-.24-1.83-.44-.74-.24-1.33-.37-1.28-.79.02-.22.33-.45.91-.68 3.56-1.55 5.94-2.57 7.14-3.07 3.4-.14 4.11.42 4.11 1.95z"/>
+            </svg>
+            Telegram
+          </button>
+
+          <button type="button" onClick={() => setIsSignUp(!isSignUp)} className="w-full text-center text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-brand-blue mt-8 transition-colors">
             {isSignUp ? 'Вже є акаунт? Увійти' : 'Немає акаунту? Реєстрація'}
           </button>
         </form>
