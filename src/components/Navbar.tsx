@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Phone, Menu, X, User, Search, Home, MessageSquare, Heart, ArrowRight } from 'lucide-react';
+import { Phone, Menu, X, User, Search, Home, Heart, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { PHONE_RAW, PHONE_DISPLAY, TELEGRAM_URL } from '../lib/config';
+import { PHONE_RAW, PHONE_DISPLAY } from '../lib/config';
+import { useCompare } from '../lib/useCompare';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -12,6 +13,7 @@ export default function Navbar() {
   const [user, setUser] = useState<any>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const { count: compareCount, compareUrl } = useCompare();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -78,22 +80,17 @@ export default function Navbar() {
         </div>
 
         <div className="hidden lg:flex items-center gap-6">
-          {/* Desktop fixed right-side contacts */}
-          <div className="fixed right-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center gap-4">
-            <a href={`tel:${PHONE_RAW}`} className="text-brand-blue animate-pulse" style={{ animationDuration: '8s' }}>
-              <Phone size={32} />
-            </a>
-            <a href={TELEGRAM_URL} target="_blank" rel="noopener noreferrer" className="text-brand-blue">
-              <MessageSquare size={32} />
-            </a>
-          </div>
-          {/* Desktop left-bottom compare banner */}
-          <div className="fixed left-4 bottom-4 hidden lg:block bg-white/90 backdrop-blur-sm border border-slate-200 rounded-xl px-4 py-2 shadow-sm flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-700">2 авто в порівнянні</span>
-            <Link to="/compare" className="text-brand-blue font-bold hover:underline flex items-center gap-1">
-              Порівняти <ArrowRight size={14} />
-            </Link>
-          </div>
+{/* Desktop left-bottom compare banner — показується лише якщо є авто */}
+          {compareCount > 0 && (
+            <div className="fixed left-4 bottom-4 hidden lg:flex bg-white/90 backdrop-blur-sm border border-slate-200 rounded-xl px-4 py-2 shadow-sm items-center gap-2 z-50">
+              <span className="text-sm font-medium text-slate-700">
+                {compareCount} авто в порівнянні
+              </span>
+              <Link to={compareUrl} className="text-brand-blue font-bold hover:underline flex items-center gap-1">
+                Порівняти <ArrowRight size={14} />
+              </Link>
+            </div>
+          )}
           
           <div className="flex items-center gap-2 text-slate-900 font-bold group">
             <Phone size={18} className="text-brand-blue" />
@@ -171,9 +168,9 @@ export default function Navbar() {
       <nav className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 flex justify-around items-center py-2 lg:hidden">
         <Link to="/" className="flex flex-col items-center text-slate-600 hover:text-brand-blue">
           <Home size={20} />
-          <span className="text-xs">Каталог</span>
+          <span className="text-xs">Головна</span>
         </Link>
-        <Link to="/search" className="flex flex-col items-center text-slate-600 hover:text-brand-blue">
+        <Link to="/catalog" className="flex flex-col items-center text-slate-600 hover:text-brand-blue">
           <Search size={20} />
           <span className="text-xs">Пошук</span>
         </Link>

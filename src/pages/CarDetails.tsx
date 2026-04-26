@@ -110,7 +110,7 @@ export default function CarDetails() {
         const imgs: string[] = data.car_images?.map((i: any) => i.url) ?? data.images ?? [];
         setImages(imgs.length ? imgs : ['https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=800']);
         // Лічимо перегляд
-        supabase.from('cars').update({ views_count: (data.views_count ?? 0) + 1 }).eq('id', data.id);
+        supabase.from('cars').update({ views_count: (data.views_count ?? 0) + 1 }).eq('id', data.id).then();
         // Перевіряємо чи в обраному у поточного користувача
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Home, Search, ArrowRight } from 'lucide-react';
 import SEOHead from '../components/SEOHead';
+import CarCard from '../components/CarCard';
 
 export default function NotFoundPage() {
   const [recommended, setRecommended] = useState<any[]>([]);

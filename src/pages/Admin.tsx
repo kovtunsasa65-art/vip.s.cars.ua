@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
+import { toast } from '../lib/toast';
 import { PHONE_RAW } from '../lib/config';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -9,7 +10,8 @@ import {
   BarChart3, Car, Users, Phone, Plus, Trash2, Edit2,
   Eye, TrendingUp, X, Search, ChevronRight, Zap, Settings,
   Image, ArrowUpRight, FileText, AlertTriangle, Download,
-  MessageSquareText, Menu, User, Bell, CheckCircle2, ShieldCheck, Send, RefreshCw, MessageCircle
+  MessageSquareText, Menu, User, Bell, CheckCircle2, ShieldCheck, Send, RefreshCw, MessageCircle, MapPin,
+  Star, ThumbsUp, ThumbsDown, Globe, BarChart2
 } from 'lucide-react';
 
 type Tab = 'dashboard' | 'cars' | 'leads' | 'users' | 'seo' | 'analytics' | 'ai' | 'content' | 'settings' | 'media';
@@ -311,7 +313,13 @@ function CarsManager({ cars, onRefresh, profile }: { cars: any[]; onRefresh: () 
   const [filters, setFilters] = useState({ search: '', status: [] as string[], brand: '', noPhotos: false, lowTrust: false, noClicks: false, onlyMy: false });
   const [isAdding, setIsAdding] = useState(false);
   const [editCar, setEditCar] = useState<any>(null);
+  const [managers, setManagers] = useState<any[]>([]);
+  const [aiLoading, setAiLoading] = useState<'desc' | 'seo' | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    supabase.from('profiles').select('id, name, email').then(({ data }) => setManagers(data ?? []));
+  }, []);
 
   const deleteSelected = async () => {
     if (!confirm(`Видалити ${selectedIds.length} авто?`)) return;
@@ -326,8 +334,48 @@ function CarsManager({ cars, onRefresh, profile }: { cars: any[]; onRefresh: () 
     onRefresh();
   };
 
-  const improveAIOdescriptions = () => {
-    alert(`Запуск AI для покращення описів ${selectedIds.length} авто...`);
+  const improveAIOdescriptions = async () => {
+    if (aiLoading) return;
+    const payload = cars.filter(c => selectedIds.includes(c.id))
+      .map(c => ({ id: c.id, brand: c.brand, model: c.model, year: c.year, description: c.description }));
+    setAiLoading('desc');
+    try {
+      const res = await fetch('/api/ai/improve-description', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cars: payload }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      toast.success(`Оновлено описи для ${json.updated} авто`);
+      setSelectedIds([]);
+      onRefresh();
+    } catch (e: any) {
+      toast.error(`Помилка AI: ${e.message}`);
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
+  const generateAISEOBulk = async () => {
+    if (aiLoading) return;
+    const payload = cars.filter(c => selectedIds.includes(c.id))
+      .map(c => ({ id: c.id, brand: c.brand, model: c.model, year: c.year, city: c.city, price: c.price, engine_volume: c.engine_volume, mileage: c.mileage }));
+    setAiLoading('seo');
+    try {
+      const res = await fetch('/api/ai/generate-seo', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cars: payload }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      toast.success(`SEO згенеровано для ${json.updated} авто`);
+      setSelectedIds([]);
+      onRefresh();
+    } catch (e: any) {
+      toast.error(`Помилка AI: ${e.message}`);
+    } finally {
+      setAiLoading(null);
+    }
   };
 
   const exportCSV = () => {
@@ -341,6 +389,34 @@ function CarsManager({ cars, onRefresh, profile }: { cars: any[]; onRefresh: () 
     link.setAttribute("download", `cars_export_${format(new Date(), 'dd_MM_yyyy')}.csv`);
     link.click();
   };
+
+  const assignManager = async (managerId: string) => {
+    await supabase.from('cars').update({ manager_id: managerId }).in('id', selectedIds);
+    setSelectedIds([]);
+    onRefresh();
+  };
+
+  const addBadge = async (badge: string | null) => {
+    await supabase.from('cars').update({ badge }).in('id', selectedIds);
+    setSelectedIds([]);
+    onRefresh();
+  };
+
+  const filtered = cars.filter(c => {
+    if (filters.search && !c.title.toLowerCase().includes(filters.search.toLowerCase())) return false;
+    if (filters.status.length > 0 && !filters.status.includes(c.status)) return false;
+    if (filters.brand && c.brand !== filters.brand) return false;
+    if (filters.noPhotos && (c.car_images?.length || 0) > 0) return false;
+    if (filters.lowTrust && (c.trust_score || 0) >= 50) return false;
+    if (filters.onlyMy && c.manager_id !== profile?.id) return false;
+    if (filters.noClicks) {
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      const isOld = new Date(c.updated_at || c.created_at) < threeDaysAgo;
+      if (!isOld || (c.clicks_call || 0) > 0) return false;
+    }
+    return true;
+  });
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -357,22 +433,6 @@ function CarsManager({ cars, onRefresh, profile }: { cars: any[]; onRefresh: () 
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [selectedIds, filtered]);
-
-  const filtered = cars.filter(c => {
-    if (filters.search && !c.title.toLowerCase().includes(filters.search.toLowerCase())) return false;
-    if (filters.status.length > 0 && !filters.status.includes(c.status)) return false;
-    if (filters.brand && c.brand !== filters.brand) return false;
-    if (filters.noPhotos && (c.car_images?.length || 0) === 0) return false; // Fixed: should be === 0 for "No Photos" filter
-    if (filters.lowTrust && (c.trust_score || 0) >= 50) return false;
-    if (filters.onlyMy && c.manager_id !== profile?.id) return false;
-    if (filters.noClicks) {
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-      const isOld = new Date(c.updated_at || c.created_at) < threeDaysAgo;
-      if (!isOld || (c.clicks_call || 0) > 0) return false;
-    }
-    return true;
-  });
 
   const brands = Array.from(new Set(cars.map(c => c.brand))).sort();
 
@@ -454,8 +514,48 @@ function CarsManager({ cars, onRefresh, profile }: { cars: any[]; onRefresh: () 
                   ))}
                 </div>
               </div>
-              <button onClick={improveAIOdescriptions} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold flex items-center gap-2 text-brand-blue"><Zap size={16} /> AI: Покращити опис</button>
-              <button className="p-2 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold flex items-center gap-2"><ArrowUpRight size={16} className="text-yellow-400" /> AI SEO</button>
+              {/* Призначити менеджера */}
+              <div className="relative group/mgr">
+                <button className="p-2 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold flex items-center gap-2">
+                  <User size={16} className="text-blue-400" /> Менеджер
+                </button>
+                <div className="absolute bottom-full left-0 mb-2 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-2 hidden group-hover/mgr:block min-w-[160px] z-10">
+                  {managers.length === 0 && <p className="px-3 py-2 text-xs text-slate-400">Немає менеджерів</p>}
+                  {managers.map(m => (
+                    <button key={m.id} onClick={() => assignManager(m.id)}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg text-xs font-bold truncate">
+                      {m.name || m.email}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Додати бейдж */}
+              <div className="relative group/badge">
+                <button className="p-2 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold flex items-center gap-2">
+                  <Star size={16} className="text-yellow-400" /> Бейдж
+                </button>
+                <div className="absolute bottom-full left-0 mb-2 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-2 hidden group-hover/badge:block min-w-[130px] z-10">
+                  {[['нове','blue'],['вигідно','orange'],['терміново','red'],['ексклюзив','purple']].map(([b]) => (
+                    <button key={b} onClick={() => addBadge(b)}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg text-xs font-bold capitalize">{b}</button>
+                  ))}
+                  <button onClick={() => addBadge(null)} className="w-full text-left px-3 py-2 hover:bg-red-50 rounded-lg text-xs font-bold text-red-400">Прибрати бейдж</button>
+                </div>
+              </div>
+
+              <button onClick={improveAIOdescriptions} disabled={!!aiLoading}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold flex items-center gap-2 text-brand-blue disabled:opacity-50">
+                {aiLoading === 'desc'
+                  ? <><div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" /> Обробка...</>
+                  : <><Zap size={16} /> AI: Покращити опис</>}
+              </button>
+              <button onClick={generateAISEOBulk} disabled={!!aiLoading}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors text-xs font-bold flex items-center gap-2 text-yellow-400 disabled:opacity-50">
+                {aiLoading === 'seo'
+                  ? <><div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" /> Генерація...</>
+                  : <><ArrowUpRight size={16} /> AI SEO</>}
+              </button>
               <button onClick={deleteSelected} className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors flex items-center gap-2"><Trash2 size={16} /> Видалити</button>
               <button onClick={() => setSelectedIds([])} className="p-2 hover:bg-white/10 text-white/50 rounded-lg transition-colors ml-2"><X size={16} /></button>
             </div>
@@ -612,7 +712,7 @@ function CarForm({ car, onClose, onSaved }: { car?: any; onClose: () => void; on
       onSaved();
     } catch (err) {
       console.error(err);
-      alert('Помилка збереження');
+      toast.error('Помилка збереження');
     } finally {
       setSaving(false);
     }
@@ -655,7 +755,7 @@ function CarForm({ car, onClose, onSaved }: { car?: any; onClose: () => void; on
         }
       } catch (err) {
         console.error('Upload error:', err);
-        alert('Помилка завантаження фото');
+        toast.error('Помилка завантаження фото');
       }
     }
     setUploading(false);
@@ -689,12 +789,37 @@ function CarForm({ car, onClose, onSaved }: { car?: any; onClose: () => void; on
 
   async function generateAiSeo() {
     setUploading(true);
-    // Імітація AI запиту
-    await new Promise(r => setTimeout(r, 1500));
-    const title = `Купити ${form.brand} ${form.model} ${form.year} року - VIP.S Cars`;
-    const desc = `Продаж ${form.brand} ${form.model} (${form.year}) в місті ${form.city}. Пробіг ${form.mileage} км. Двигун ${form.engine_volume}л. Преміальний стан, перевірене авто. Телефонуйте!`;
-    setForm(p => ({ ...p, seo_title: title, seo_description: desc, seo_h1: `${form.brand} ${form.model} ${form.year}` }));
-    setUploading(false);
+    try {
+      const res = await fetch('/api/ai/generate-seo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          save: false, // лише повертаємо дані, не зберігаємо (форма ще не збережена)
+          cars: [{ id: car?.id ?? 0, brand: form.brand, model: form.model, year: Number(form.year), city: form.city, price: Number(form.price), engine_volume: Number(form.engine_volume), mileage: Number(form.mileage) }],
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      const seo = json.results?.[0];
+      if (seo) {
+        setForm(p => ({
+          ...p,
+          seo_title: seo.seo_title,
+          seo_description: seo.seo_description,
+          seo_h1: `${form.brand} ${form.model} ${form.year}`,
+        }));
+      }
+    } catch (e: any) {
+      // Fallback на шаблон якщо AI недоступний
+      setForm(p => ({
+        ...p,
+        seo_title: `Купити ${form.brand} ${form.model} ${form.year} року — VIP.S Cars`,
+        seo_description: `${form.brand} ${form.model} (${form.year}) у ${form.city}. Пробіг ${form.mileage} км. Перевірене авто.`,
+        seo_h1: `${form.brand} ${form.model} ${form.year}`,
+      }));
+    } finally {
+      setUploading(false);
+    }
   }
 
   const inp = "w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-blue/10 focus:border-brand-blue transition-all";
@@ -839,7 +964,7 @@ function CarForm({ car, onClose, onSaved }: { car?: any; onClose: () => void; on
                 <label className={label}>Бейдж</label>
                 <select value={form.badge} onChange={set('badge')} className={inp}>
                   <option value="">Без бейджа</option>
-                  {['топ', 'акція', 'новинка', 'терміново'].map(v => <option key={v} value={v}>{v}</option>)}
+                  {['нове', 'вигідно', 'терміново', 'ексклюзив'].map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </div>
             </div>
@@ -1300,86 +1425,294 @@ function AiManager() {
 }
 // ─── Content Manager ─────────────────────────────────────────
 function ContentManager() {
-  const [activeTab, setActiveTab] = useState<'blog' | 'reviews'>('blog');
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadData();
-  }, [activeTab]);
-
-  async function loadData() {
-    setLoading(true);
-    const table = activeTab === 'blog' ? 'blog_posts' : 'reviews';
-    const { data } = await supabase.from(table).select('*').order('created_at', { ascending: false });
-    setItems(data || []);
-    setLoading(false);
-  }
-
-  async function toggleStatus(item: any) {
-    const table = activeTab === 'blog' ? 'blog_posts' : 'reviews';
-    const field = activeTab === 'blog' ? 'is_published' : 'is_published'; // Both use is_published or similar
-    const newVal = !item.is_published;
-    await supabase.from(table).update({ is_published: newVal }).eq('id', item.id);
-    loadData();
-  }
+  const [activeTab, setActiveTab] = useState<'reviews' | 'blog'>('reviews');
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-black text-slate-900">✍️ Керування контентом</h1>
+        <h1 className="text-xl font-black text-slate-900">Керування контентом</h1>
         <div className="flex bg-white p-1 rounded-xl border border-slate-200">
-          <button onClick={() => setActiveTab('blog')} className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-all", activeTab === 'blog' ? "bg-slate-900 text-white" : "text-slate-400 hover:bg-slate-50")}>Блог</button>
-          <button onClick={() => setActiveTab('reviews')} className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-all", activeTab === 'reviews' ? "bg-slate-900 text-white" : "text-slate-400 hover:bg-slate-50")}>Відгуки</button>
+          <button onClick={() => setActiveTab('reviews')} className={cn('px-4 py-2 rounded-lg text-sm font-bold transition-all', activeTab === 'reviews' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50')}>Відгуки</button>
+          <button onClick={() => setActiveTab('blog')}    className={cn('px-4 py-2 rounded-lg text-sm font-bold transition-all', activeTab === 'blog'    ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50')}>Блог</button>
         </div>
       </div>
+      {activeTab === 'reviews' && <ReviewsModerationPanel />}
+      {activeTab === 'blog'    && <BlogManager />}
+    </div>
+  );
+}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <th className="p-4">{activeTab === 'blog' ? 'Заголовок / Теги' : 'Клієнт / Авто'}</th>
-              <th className="p-4">Дата</th>
-              <th className="p-4 text-center">Статус</th>
-              <th className="p-4 text-right">Дії</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {items.map(item => (
-              <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="p-4">
-                  {activeTab === 'blog' ? (
-                    <>
-                      <div className="text-sm font-black text-slate-900">{item.title}</div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{item.category} · {item.tags?.join(', ')}</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-sm font-black text-slate-900">{item.name}</div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{item.car_title} · {item.rating}⭐</div>
-                    </>
-                  )}
-                </td>
-                <td className="p-4 text-xs text-slate-500">{format(new Date(item.created_at), 'dd.MM.yyyy')}</td>
-                <td className="p-4 text-center">
-                  <button onClick={() => toggleStatus(item)} className={cn("px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border transition-all", item.is_published ? "bg-green-50 text-green-600 border-green-100" : "bg-slate-50 text-slate-400 border-slate-100")}>
-                    {item.is_published ? 'Опубліковано' : 'Чернетка'}
-                  </button>
-                </td>
-                <td className="p-4 text-right">
-                  <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-400"><Edit2 size={14}/></button>
-                    <button className="p-2 hover:bg-red-50 rounded-lg text-red-400"><Trash2 size={14}/></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {items.length === 0 && (
-              <tr><td colSpan={4} className="p-12 text-center text-slate-300 font-black uppercase tracking-widest">Контент не знайдено</td></tr>
-            )}
-          </tbody>
-        </table>
+// ─── Reviews Moderation ───────────────────────────────────────
+function ReviewsModerationPanel() {
+  const [reviews, setReviews]           = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
+  const [adminNotes, setAdminNotes]     = useState<Record<number, string>>({});
+  const [busy, setBusy]                 = useState<number | null>(null);
+  const [showSeed, setShowSeed]         = useState(false);
+  const [seed, setSeed]                 = useState({ user_name: '', rating: 5, review_text: '' });
+  const [counts, setCounts]             = useState<Record<string, number>>({});
+
+  useEffect(() => { load(); }, [statusFilter]);
+  useEffect(() => { loadCounts(); }, []);
+
+  async function load() {
+    let q = supabase.from('reviews').select('*').order('created_at', { ascending: false });
+    if (statusFilter !== 'all') q = q.eq('status', statusFilter);
+    const { data } = await q;
+    setReviews(data ?? []);
+    const notes: Record<number, string> = {};
+    (data ?? []).forEach((r: any) => { if (r.admin_note) notes[r.id] = r.admin_note; });
+    setAdminNotes(prev => ({ ...prev, ...notes }));
+  }
+
+  async function loadCounts() {
+    const { data } = await supabase.from('reviews').select('status');
+    if (!data) return;
+    const c: Record<string, number> = { all: data.length, pending: 0, approved: 0, rejected: 0 };
+    data.forEach((r: any) => { c[r.status] = (c[r.status] ?? 0) + 1; });
+    setCounts(c);
+  }
+
+  async function approve(id: number) {
+    setBusy(id);
+    await supabase.from('reviews').update({ status: 'approved', admin_note: adminNotes[id] ?? null }).eq('id', id);
+    await Promise.all([load(), loadCounts()]);
+    setBusy(null);
+  }
+
+  async function reject(id: number) {
+    const note = (adminNotes[id] ?? '').trim();
+    if (!note) { toast.error('Вкажіть причину відхилення в полі «Примітка»'); return; }
+    setBusy(id);
+    await supabase.from('reviews').update({ status: 'rejected', admin_note: note }).eq('id', id);
+    await Promise.all([load(), loadCounts()]);
+    setBusy(null);
+  }
+
+  async function del(id: number) {
+    if (!confirm('Видалити відгук назавжди?')) return;
+    setBusy(id);
+    await supabase.from('reviews').delete().eq('id', id);
+    await Promise.all([load(), loadCounts()]);
+    setBusy(null);
+  }
+
+  async function saveNote(id: number) {
+    await supabase.from('reviews').update({ admin_note: adminNotes[id] ?? null }).eq('id', id);
+  }
+
+  async function saveSeed() {
+    if (!seed.user_name.trim() || seed.review_text.trim().length < 20) {
+      toast.error('Ім\'я та текст (мін. 20 символів) обов\'язкові'); return;
+    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('reviews').insert({
+      user_id: user.id, user_name: seed.user_name,
+      rating: seed.rating, review_text: seed.review_text,
+      status: 'approved', is_verified: true,
+    });
+    setSeed({ user_name: '', rating: 5, review_text: '' });
+    setShowSeed(false);
+    setStatusFilter('approved');
+    await Promise.all([load(), loadCounts()]);
+  }
+
+  const STATUS_TAB: Array<{ key: typeof statusFilter; label: string; color: string }> = [
+    { key: 'pending',  label: 'На модерації', color: 'bg-yellow-100 text-yellow-700' },
+    { key: 'approved', label: 'Опубліковані', color: 'bg-green-100 text-green-700'  },
+    { key: 'rejected', label: 'Відхилені',    color: 'bg-red-100 text-red-600'      },
+    { key: 'all',      label: 'Всі',          color: 'bg-slate-100 text-slate-600'  },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Filters + seed button */}
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div className="flex flex-wrap gap-2">
+          {STATUS_TAB.map(t => (
+            <button key={t.key} onClick={() => setStatusFilter(t.key)}
+              className={cn('px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5',
+                statusFilter === t.key ? 'bg-brand-blue text-white border-brand-blue' : 'bg-white text-slate-500 border-slate-200 hover:border-brand-blue')}>
+              {t.label}
+              {counts[t.key] > 0 && (
+                <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-black',
+                  statusFilter === t.key ? 'bg-white/20' : t.color)}>{counts[t.key]}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setShowSeed(s => !s)}
+          className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-xl text-sm font-bold hover:bg-brand-blue-dark transition-colors">
+          <Plus size={14}/> Seed відгук
+        </button>
       </div>
+
+      {/* Seed form */}
+      {showSeed && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 space-y-3">
+          <h3 className="font-black text-slate-900 text-sm">Додати стартовий відгук (одразу публікується)</h3>
+          <div className="flex gap-3">
+            <input value={seed.user_name} onChange={e => setSeed(s => ({ ...s, user_name: e.target.value }))}
+              placeholder="Ім'я автора" className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-brand-blue focus:outline-none" />
+            <select value={seed.rating} onChange={e => setSeed(s => ({ ...s, rating: +e.target.value }))}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
+              {[5,4,3,2,1].map(n => <option key={n} value={n}>{n} ★</option>)}
+            </select>
+          </div>
+          <textarea value={seed.review_text} onChange={e => setSeed(s => ({ ...s, review_text: e.target.value }))}
+            rows={3} placeholder="Текст відгуку (мін. 20 символів)"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:border-brand-blue focus:outline-none" />
+          <div className="flex gap-2">
+            <button onClick={saveSeed} className="px-4 py-2 bg-brand-blue text-white rounded-xl text-sm font-bold hover:bg-brand-blue-dark transition-colors">Опублікувати</button>
+            <button onClick={() => setShowSeed(false)} className="px-4 py-2 bg-white border border-slate-200 text-slate-500 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors">Скасувати</button>
+          </div>
+        </div>
+      )}
+
+      {/* Reviews list */}
+      <div className="space-y-3">
+        {reviews.length === 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 font-semibold">
+            Відгуків немає
+          </div>
+        )}
+        {reviews.map(r => (
+          <div key={r.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                {r.user_avatar
+                  ? <img src={r.user_avatar} alt="" className="w-10 h-10 rounded-full object-cover border border-slate-100" />
+                  : <div className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center font-black text-brand-blue">{r.user_name?.[0]?.toUpperCase()}</div>
+                }
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-black text-slate-900 text-sm">{r.user_name}</span>
+                    {r.is_verified && <CheckCircle2 size={13} className="text-brand-blue" />}
+                  </div>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} size={11} className={i < r.rating ? 'text-yellow-400 fill-yellow-400' : 'text-slate-200'} />
+                    ))}
+                    <span className="text-[10px] text-slate-400 ml-1">{format(new Date(r.created_at), 'dd.MM.yyyy HH:mm')}</span>
+                  </div>
+                </div>
+              </div>
+              <span className={cn('text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wide',
+                r.status === 'pending'  ? 'bg-yellow-100 text-yellow-700' :
+                r.status === 'approved' ? 'bg-green-100 text-green-700'  : 'bg-red-100 text-red-600')}>
+                {r.status === 'pending' ? 'На модерації' : r.status === 'approved' ? 'Опубліковано' : 'Відхилено'}
+              </span>
+            </div>
+
+            {/* Review text */}
+            <p className="text-sm text-slate-600 leading-relaxed">{r.review_text}</p>
+
+            {/* Admin note */}
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1 block">Примітка адміна</label>
+              <textarea
+                value={adminNotes[r.id] ?? ''}
+                onChange={e => setAdminNotes(prev => ({ ...prev, [r.id]: e.target.value }))}
+                onBlur={() => saveNote(r.id)}
+                rows={2}
+                placeholder="Причина відхилення або внутрішня нотатка..."
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs resize-none focus:border-brand-blue focus:outline-none"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              {r.status !== 'approved' && (
+                <button onClick={() => approve(r.id)} disabled={busy === r.id}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-green-500 text-white rounded-xl text-xs font-bold hover:bg-green-600 transition-colors disabled:opacity-50">
+                  <ThumbsUp size={13}/> Опублікувати
+                </button>
+              )}
+              {r.status !== 'rejected' && (
+                <button onClick={() => reject(r.id)} disabled={busy === r.id}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-orange-500 text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition-colors disabled:opacity-50">
+                  <ThumbsDown size={13}/> Відхилити
+                </button>
+              )}
+              <button onClick={() => del(r.id)} disabled={busy === r.id}
+                className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-500 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors disabled:opacity-50 ml-auto">
+                <Trash2 size={13}/> Видалити
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Blog Manager ─────────────────────────────────────────────
+function BlogManager() {
+  const [posts, setPosts]   = useState<any[]>([]);
+  const [loadingB, setLoadingB] = useState(true);
+
+  useEffect(() => { loadPosts(); }, []);
+
+  async function loadPosts() {
+    setLoadingB(true);
+    const { data } = await supabase.from('blog_posts').select('*').order('created_at', { ascending: false });
+    setPosts(data ?? []);
+    setLoadingB(false);
+  }
+
+  async function togglePublished(item: any) {
+    await supabase.from('blog_posts').update({ is_published: !item.is_published }).eq('id', item.id);
+    loadPosts();
+  }
+
+  async function deletePost(id: number) {
+    if (!confirm('Видалити пост?')) return;
+    await supabase.from('blog_posts').delete().eq('id', id);
+    loadPosts();
+  }
+
+  if (loadingB) return <div className="flex justify-center py-12"><div className="animate-spin w-8 h-8 border-2 border-brand-blue border-t-transparent rounded-full" /></div>;
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <table className="w-full text-left">
+        <thead>
+          <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <th className="p-4">Заголовок / Теги</th>
+            <th className="p-4">Дата</th>
+            <th className="p-4 text-center">Статус</th>
+            <th className="p-4 text-right">Дії</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {posts.map(item => (
+            <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
+              <td className="p-4">
+                <div className="text-sm font-black text-slate-900">{item.title}</div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{item.category} · {item.tags?.join(', ')}</div>
+              </td>
+              <td className="p-4 text-xs text-slate-500">{format(new Date(item.created_at), 'dd.MM.yyyy')}</td>
+              <td className="p-4 text-center">
+                <button onClick={() => togglePublished(item)}
+                  className={cn('px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border transition-all',
+                    item.is_published ? 'bg-green-50 text-green-600 border-green-100' : 'bg-slate-50 text-slate-400 border-slate-100')}>
+                  {item.is_published ? 'Опубліковано' : 'Чернетка'}
+                </button>
+              </td>
+              <td className="p-4 text-right">
+                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => deletePost(item.id)} className="p-2 hover:bg-red-50 rounded-lg text-red-400"><Trash2 size={14}/></button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {posts.length === 0 && (
+            <tr><td colSpan={4} className="p-12 text-center text-slate-300 font-black uppercase tracking-widest">Постів немає</td></tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -22,7 +22,7 @@ import Admin from './pages/Admin';
 import Login from './pages/Login';
 import ClientDashboard from './pages/ClientDashboard';
 import CarDetails from './pages/CarDetails';
-import { AvtopidbirPage, VykupPage, PerevirkaPage } from './pages/ServicePages';
+import { AvtopidbirPage, VykupPage, PerevirkaPage, ObminPage } from './pages/ServicePages';
 import ComparePage from './pages/ComparePage';
 import FeedPage from './pages/FeedPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -39,6 +39,7 @@ import ServerError from './pages/ServerError';
 import Maintenance from './pages/Maintenance';
 import ProtectedRoute from './components/ProtectedRoute';
 import InstallPWA from './components/InstallPWA';
+import ToastContainer from './components/ToastContainer';
 
 function HomePage() {
   return (
@@ -111,6 +112,7 @@ export default function App() {
                 <Route path="/avtopidbir" element={<AvtopidbirPage />} />
                 <Route path="/vykup"      element={<VykupPage />} />
                 <Route path="/perevirka"  element={<PerevirkaPage />} />
+                <Route path="/obmin"      element={<ObminPage />} />
                 <Route path="/compare"    element={<ComparePage />} />
                 <Route path="/feed"       element={<FeedPage />} />
                 <Route path="/favorites"  element={<Favorites />} />
@@ -128,6 +130,7 @@ export default function App() {
               </Routes>
             </AnimatePresence>
             <InstallPWA />
+            <ToastContainer />
 
             <Footer />
 

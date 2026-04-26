@@ -94,6 +94,7 @@ export default function SearchBox({ value, onChange, onApply, placeholder = 'М�
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef     = useRef<HTMLInputElement>(null);
   const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef     = useRef<AbortController | null>(null);
 
   // ─── Popular searches (last 7 days) ─────────────────────────────────────────
   useEffect(() => {
@@ -127,8 +128,6 @@ export default function SearchBox({ value, onChange, onApply, placeholder = 'М�
       if (abortRef.current) abortRef.current.abort();
     };
   }, []);
-
-  const abortRef = useRef<AbortController | null>(null);
 
   // ─── Fetch suggestions ────────────────────────────────────────────────────────
   const fetchSuggestions = useCallback(async (raw: string) => {

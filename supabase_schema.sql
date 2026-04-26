@@ -469,6 +469,67 @@ CREATE TABLE redirects (
 CREATE INDEX idx_redirects_from_url ON redirects(from_url);
 
 
+-- ─── ТАБЛИЦЯ: reviews (Відгуки користувачів) ───────────────
+CREATE TABLE reviews (
+  id              BIGSERIAL PRIMARY KEY,
+  user_id         UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_name       VARCHAR(100) NOT NULL,
+  user_avatar     VARCHAR(500),
+  rating          SMALLINT    NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  review_text     TEXT        NOT NULL CHECK (char_length(review_text) >= 20),
+  category        VARCHAR(50),
+  status          VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  is_verified     BOOLEAN     NOT NULL DEFAULT false,
+  admin_note      TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Один відгук на 14 днів на користувача
+CREATE UNIQUE INDEX idx_reviews_user_14d
+  ON reviews (user_id, (date_trunc('day', created_at)))
+  WHERE status != 'rejected';
+
+-- Щоб обійти обмеження і все ж ввести кулдаун через функцію:
+CREATE OR REPLACE FUNCTION check_review_cooldown()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM reviews
+    WHERE user_id = NEW.user_id
+      AND created_at > NOW() - INTERVAL '14 days'
+      AND id != COALESCE(NEW.id, 0)
+  ) THEN
+    RAISE EXCEPTION '14 days cooldown not elapsed';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_review_cooldown
+  BEFORE INSERT ON reviews
+  FOR EACH ROW EXECUTE FUNCTION check_review_cooldown();
+
+-- Автооновлення updated_at
+CREATE OR REPLACE FUNCTION set_reviews_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$;
+
+CREATE TRIGGER trg_reviews_updated_at
+  BEFORE UPDATE ON reviews
+  FOR EACH ROW EXECUTE FUNCTION set_reviews_updated_at();
+
+CREATE INDEX idx_reviews_status     ON reviews(status, created_at DESC);
+CREATE INDEX idx_reviews_user_id    ON reviews(user_id);
+
+-- RLS
+ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_read_approved"   ON reviews FOR SELECT USING (status = 'approved');
+CREATE POLICY "auth_insert_review"     ON reviews FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "admin_all_reviews"      ON reviews FOR ALL USING (auth.role() = 'service_role');
+
+
 -- ─── ТАБЛИЦЯ: ai_rules ──────────────────────────────────────
 CREATE TABLE ai_rules (
   id                BIGSERIAL PRIMARY KEY,

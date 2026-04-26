@@ -1,5 +1,6 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
+import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -11,8 +12,10 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
-const CHAT_ID   = process.env.TELEGRAM_CHAT_ID!;
+const BOT_TOKEN    = process.env.TELEGRAM_BOT_TOKEN!;
+const CHAT_ID      = process.env.TELEGRAM_CHAT_ID!;
+const GOOGLE_KEY   = process.env.GOOGLE_API_KEY ?? '';
+const genAI        = GOOGLE_KEY ? new GoogleGenAI({ apiKey: GOOGLE_KEY }) : null;
 
 async function tgRequest(method: string, body: any) {
   const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
@@ -400,6 +403,73 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // ── AI: покращити описи ───────────────────────────────────
+  app.post("/api/ai/improve-description", async (req, res) => {
+    const { cars: carList } = req.body as { cars: { id: number; brand: string; model: string; year: number; description?: string }[] };
+    if (!Array.isArray(carList) || carList.length === 0)
+      return res.status(400).json({ error: "cars[] required" });
+    if (carList.length > 20)
+      return res.status(400).json({ error: "Max 20 cars per request" });
+    if (!genAI)
+      return res.status(503).json({ error: "AI not configured — set GOOGLE_API_KEY in .env.local" });
+
+    const results: { id: number; description: string }[] = [];
+    for (const car of carList) {
+      const prompt = `Напиши продажний опис автомобіля для українського автосайту (100-150 слів, без зайвих символів, без заголовків, тільки текст):
+Авто: ${car.brand} ${car.model} ${car.year}
+Поточний опис: ${car.description ?? 'відсутній'}
+Вимоги: привабливо, конкретно, підкресли переваги, не вигадуй характеристики.`;
+      try {
+        const r = await genAI.models.generateContent({ model: "gemini-2.0-flash", contents: prompt });
+        results.push({ id: car.id, description: (r.text ?? '').trim() });
+      } catch {
+        results.push({ id: car.id, description: car.description ?? '' });
+      }
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    for (const { id, description } of results) {
+      if (description) await sb.from("cars").update({ description }).eq("id", id);
+    }
+    res.json({ success: true, updated: results.length });
+  });
+
+  // ── AI: згенерувати SEO ───────────────────────────────────
+  app.post("/api/ai/generate-seo", async (req, res) => {
+    const { cars: carList, save = true } = req.body as { cars: { id: number; brand: string; model: string; year: number; city?: string; price?: number; engine_volume?: number; mileage?: number }[]; save?: boolean };
+    if (!Array.isArray(carList) || carList.length === 0)
+      return res.status(400).json({ error: "cars[] required" });
+    if (carList.length > 20)
+      return res.status(400).json({ error: "Max 20 cars per request" });
+    if (!genAI)
+      return res.status(503).json({ error: "AI not configured — set GOOGLE_API_KEY in .env.local" });
+
+    const results: { id: number; seo_title: string; seo_description: string }[] = [];
+    for (const car of carList) {
+      const km = car.mileage ? `${Math.round(car.mileage / 1000)} тис. км` : '';
+      const prompt = `Для автосайту vip-s-cars.com згенеруй SEO title і meta description українською:
+Авто: ${car.brand} ${car.model} ${car.year}${car.engine_volume ? ` ${car.engine_volume}л` : ''}${km ? `, ${km}` : ''}${car.city ? `, ${car.city}` : ''}${car.price ? `, $${car.price.toLocaleString()}` : ''}
+Відповідь СТРОГО в форматі JSON:
+{"seo_title":"...(до 60 символів)","seo_description":"...(до 155 символів)"}`;
+      try {
+        const r = await genAI.models.generateContent({ model: "gemini-2.0-flash", contents: prompt });
+        const text = (r.text ?? '').replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(text);
+        results.push({ id: car.id, seo_title: parsed.seo_title ?? '', seo_description: parsed.seo_description ?? '' });
+      } catch {
+        results.push({ id: car.id, seo_title: `Купити ${car.brand} ${car.model} ${car.year}`, seo_description: `${car.brand} ${car.model} ${car.year} в наявності. VIP.S Cars — перевірені авто.` });
+      }
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    if (save) {
+      for (const { id, seo_title, seo_description } of results) {
+        if (id) await sb.from("cars").update({ seo_title, seo_description }).eq("id", id);
+      }
+    }
+    res.json({ success: true, updated: save ? results.length : 0, results });
   });
 
   // ── Cron ──────────────────────────────────────────────────

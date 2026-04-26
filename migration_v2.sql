@@ -57,7 +57,73 @@ CREATE POLICY "anon_insert_feed_events"   ON feed_events FOR INSERT TO anon WITH
 CREATE POLICY "service_read_feed_events"  ON feed_events FOR SELECT USING (auth.role() = 'service_role');
 
 
+-- ─── 3. ВІДГУКИ КОРИСТУВАЧІВ (Reviews) ──────────────────────
+
+CREATE TABLE IF NOT EXISTS reviews (
+  id              BIGSERIAL PRIMARY KEY,
+  user_id         UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_name       VARCHAR(100) NOT NULL,
+  user_avatar     VARCHAR(500),
+  rating          SMALLINT    NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  review_text     TEXT        NOT NULL CHECK (char_length(review_text) >= 20),
+  category        VARCHAR(50),            -- напр. 'avtopidbir', 'vykup', 'perevirka', 'obmin'
+  status          VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  is_verified     BOOLEAN     NOT NULL DEFAULT false,
+  admin_note      TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Якщо таблиця вже існує — додаємо колонку category (безпечно)
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS category VARCHAR(50);
+
+CREATE INDEX IF NOT EXISTS idx_reviews_status  ON reviews(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reviews_user_id ON reviews(user_id);
+
+-- Кулдаун 14 днів — тригер
+CREATE OR REPLACE FUNCTION check_review_cooldown()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM reviews
+    WHERE user_id = NEW.user_id
+      AND created_at > NOW() - INTERVAL '14 days'
+  ) THEN
+    RAISE EXCEPTION '14 days cooldown not elapsed';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_review_cooldown ON reviews;
+CREATE TRIGGER trg_review_cooldown
+  BEFORE INSERT ON reviews
+  FOR EACH ROW EXECUTE FUNCTION check_review_cooldown();
+
+-- Автооновлення updated_at
+CREATE OR REPLACE FUNCTION set_reviews_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_reviews_updated_at ON reviews;
+CREATE TRIGGER trg_reviews_updated_at
+  BEFORE UPDATE ON reviews
+  FOR EACH ROW EXECUTE FUNCTION set_reviews_updated_at();
+
+-- RLS
+ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "public_read_approved"  ON reviews;
+DROP POLICY IF EXISTS "auth_insert_review"    ON reviews;
+DROP POLICY IF EXISTS "admin_all_reviews"     ON reviews;
+CREATE POLICY "public_read_approved"  ON reviews FOR SELECT USING (status = 'approved');
+CREATE POLICY "auth_insert_review"    ON reviews FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "admin_all_reviews"     ON reviews FOR ALL USING (auth.role() = 'service_role');
+
+
 -- ─── ГОТОВО ──────────────────────────────────────────────────
 -- Після виконання перевір у Table Editor що з'явились:
 -- • search_events
 -- • feed_events
+-- • reviews  (з тригерами cooldown + updated_at)

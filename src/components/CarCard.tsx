@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Gauge, Settings, Heart, ShieldCheck, Eye, Fuel } from 'lucide-react';
+import { Gauge, Settings, Heart, ShieldCheck, Eye, Fuel, GitCompareArrows } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { PHONE_RAW } from '../lib/config';
+import { useCompare } from '../lib/useCompare';
 
 type CarCardProps = { car: any };
 
@@ -27,6 +28,8 @@ function TrustBadge({ score }: { score: number }) {
 export default function CarCard({ car }: CarCardProps) {
   const [liked, setLiked] = useState(false);
   const [imgIdx, setImgIdx] = useState(0);
+  const { ids: compareIds, toggle: toggleCompare, maxReached } = useCompare();
+  const inCompare = compareIds.includes(car.id);
 
   // Отримуємо зображення — нова схема (car_images) або стара (images[])
   const images: string[] = car.car_images?.map((i: any) => i.url)
@@ -184,6 +187,19 @@ export default function CarCard({ car }: CarCardProps) {
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.09 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 .9h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
           </a>
+          <button
+            onClick={e => { e.preventDefault(); toggleCompare(car.id); }}
+            disabled={!inCompare && maxReached}
+            title={inCompare ? 'Прибрати з порівняння' : maxReached ? 'Максимум 3 авто' : 'Додати до порівняння'}
+            className={cn(
+              'w-10 flex items-center justify-center rounded-lg border transition-colors',
+              inCompare
+                ? 'border-brand-blue text-brand-blue bg-brand-blue/5'
+                : 'border-slate-200 text-slate-400 hover:border-brand-blue hover:text-brand-blue disabled:opacity-30 disabled:cursor-not-allowed'
+            )}
+          >
+            <GitCompareArrows size={15} />
+          </button>
         </div>
       </div>
     </motion.div>
