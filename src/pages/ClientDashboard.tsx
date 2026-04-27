@@ -173,14 +173,17 @@ export default function ClientDashboard() {
                           <div className="flex flex-col items-center sm:items-end gap-2">
                               <span className={cn(
                                 "text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border shadow-sm",
-                                (car.status === 'active' || car.status === 'available') ? "bg-green-500 text-white border-green-500 shadow-green-200/50" :
+                                car.status === 'active'     ? "bg-green-500 text-white border-green-500 shadow-green-200/50" :
                                 car.status === 'moderation' ? "bg-amber-100 text-amber-700 border-amber-200" :
-                                car.status === 'revision' ? "bg-red-50 text-red-600 border-red-100 animate-pulse" :
+                                car.status === 'paused'     ? "bg-blue-50 text-blue-500 border-blue-100" :
+                                car.status === 'rejected'   ? "bg-red-50 text-red-600 border-red-100 animate-pulse" :
                                 "bg-slate-100 text-slate-500 border-slate-200"
                               )}>
-                                {car.status === 'moderation' ? 'На модерації' : 
-                                 (car.status === 'active' || car.status === 'available') ? 'Опубліковано' : 
-                                 car.status === 'revision' ? 'На доопрацюванні' :
+                                {car.status === 'active'     ? 'Опубліковано' :
+                                 car.status === 'moderation' ? 'На модерації' :
+                                 car.status === 'paused'     ? 'Призупинено' :
+                                 car.status === 'rejected'   ? 'Відхилено' :
+                                 car.status === 'sold'       ? 'Продано' :
                                  car.status}
                               </span>
                              <div className="text-[9px] text-slate-300 font-bold uppercase">{new Date(car.created_at).toLocaleDateString()}</div>

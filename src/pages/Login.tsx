@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Lock, Mail, Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -26,11 +26,20 @@ export default function Login() {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
+        const { data: signUpData, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+
+        // Створюємо профіль одразу після реєстрації
+        if (signUpData.user) {
+          await supabase.from('profiles').upsert({
+            id:         signUpData.user.id,
+            email:      signUpData.user.email,
+            name:       email.split('@')[0],
+            role:       'user',
+            created_at: new Date().toISOString(),
+          }, { onConflict: 'id' });
+        }
+
         setMessage('Акаунт створено! Тепер ви можете увійти, використовуючи свої дані.');
         setIsSignUp(false);
       } else {

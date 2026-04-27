@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { PHONE_TEL } from './lib/config';
+import { SiteSettingsProvider } from './lib/SiteSettingsContext';
 import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
 import { Phone, MessageCircle } from 'lucide-react';
 import React from 'react';
@@ -97,16 +98,32 @@ function PageWrapper({ children }: { children: React.ReactNode }) {
   return <div className="pt-20">{children}</div>;
 }
 
+// Скролить до якоря (#hash) після навігації в SPA
+function HashScroller() {
+  const { hash, pathname } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    const timer = setTimeout(() => {
+      const el = document.querySelector(hash);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [hash, pathname]);
+  return null;
+}
+
 export default function App() {
   return (
+    <SiteSettingsProvider>
     <Router>
+      <HashScroller />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/admin-login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/update-password" element={<UpdatePassword />} />
-          <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><Admin /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><ClientDashboard /></ProtectedRoute>} />
           <Route path="/cabinet/*" element={<ProtectedRoute><ClientDashboard /></ProtectedRoute>} />
           
@@ -157,5 +174,6 @@ export default function App() {
         </Routes>
       </Suspense>
     </Router>
+    </SiteSettingsProvider>
   );
 }

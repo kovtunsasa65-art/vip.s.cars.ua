@@ -20,7 +20,7 @@ export default function AnalyticsManager({ cars, leads }: AnalyticsProps) {
     { label: 'Загальна вартість парку', value: `$${totalValue.toLocaleString()}`, trend: '+12.5%', isUp: true, icon: <TrendingUp size={20} /> },
     { label: 'Середня ціна авто', value: `$${Math.round(avgPrice).toLocaleString()}`, trend: '-2.1%', isUp: false, icon: <Users size={20} /> },
     { label: 'Конверсія в заявку', value: `${leadConversion}%`, trend: '+5.4%', isUp: true, icon: <MousePointer2 size={20} /> },
-    { label: 'Активні оголошення', value: cars.filter(c => c.status === 'available').length.toString(), trend: '+2', isUp: true, icon: <Eye size={20} /> },
+    { label: 'Активні оголошення', value: cars.filter(c => c.status === 'active').length.toString(), trend: '+2', isUp: true, icon: <Eye size={20} /> },
   ];
 
   return (

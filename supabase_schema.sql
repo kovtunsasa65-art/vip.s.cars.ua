@@ -778,3 +778,86 @@ CREATE POLICY "service_read_feed_events" ON feed_events FOR SELECT USING (auth.r
 
 -- ─── ТЕСТОВІ ДАНІ (Опціонально) ─────────────────────────────
 -- Можна додати пізніше або через адмінку.
+
+-- ─── ГЛОБАЛЬНІ НАЛАШТУВАННЯ САЙТУ ───────────────────────────
+CREATE TABLE IF NOT EXISTS site_settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Дефолтні значення
+INSERT INTO site_settings (key, value) VALUES
+  ('site_phone',    '+380930820122'),
+  ('site_telegram', 'vips_cars'),
+  ('site_address',  'Київ, Україна'),
+  ('site_email',    'info@vip-s-cars.com'),
+  ('site_hours',    'Пн–Нд 09:00–21:00'),
+  ('pwa_prompt_enabled', 'true')
+ON CONFLICT (key) DO NOTHING;
+
+-- RLS: читають всі, пишуть лише service_role
+ALTER TABLE site_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_read_site_settings"   ON site_settings FOR SELECT USING (true);
+CREATE POLICY "service_write_site_settings" ON site_settings FOR ALL USING (auth.role() = 'service_role');
+
+-- ─── RLS ПОЛІТИКИ ────────────────────────────────────────────
+-- Виконати в Supabase SQL Editor або через міграцію
+
+-- cars: читають усі (тільки active), пишуть автентифіковані
+ALTER TABLE cars ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_read_active_cars"
+  ON cars FOR SELECT USING (status = 'active' AND deleted_at IS NULL);
+CREATE POLICY "auth_insert_car"
+  ON cars FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "owner_update_car"
+  ON cars FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "service_all_cars"
+  ON cars FOR ALL USING (auth.role() = 'service_role');
+
+-- car_images: читають усі, пишуть власники авто
+ALTER TABLE car_images ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_read_car_images"
+  ON car_images FOR SELECT USING (true);
+CREATE POLICY "service_all_car_images"
+  ON car_images FOR ALL USING (auth.role() = 'service_role');
+
+-- profiles: кожен бачить лише свій профіль
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "owner_read_profile"
+  ON profiles FOR SELECT TO authenticated USING (auth.uid() = id);
+CREATE POLICY "owner_update_profile"
+  ON profiles FOR UPDATE TO authenticated USING (auth.uid() = id);
+CREATE POLICY "auth_insert_profile"
+  ON profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+CREATE POLICY "service_all_profiles"
+  ON profiles FOR ALL USING (auth.role() = 'service_role');
+
+-- user_favorites: кожен бачить лише своє обране
+ALTER TABLE user_favorites ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "owner_all_favorites"
+  ON user_favorites FOR ALL TO authenticated USING (auth.uid() = user_id);
+
+-- user_views: кожен бачить лише свої перегляди
+ALTER TABLE user_views ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "owner_all_views"
+  ON user_views FOR ALL TO authenticated USING (auth.uid() = user_id);
+
+-- subscriptions: кожен бачить лише свої підписки
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "owner_all_subscriptions"
+  ON subscriptions FOR ALL TO authenticated USING (auth.uid() = user_id);
+
+-- leads: анонімні можуть тільки вставляти, читає service_role
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "anon_insert_lead"
+  ON leads FOR INSERT WITH CHECK (true);
+CREATE POLICY "service_all_leads"
+  ON leads FOR ALL USING (auth.role() = 'service_role');
+
+-- seo_pages: читають усі, пишуть service_role
+ALTER TABLE seo_pages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_read_seo_pages"
+  ON seo_pages FOR SELECT USING (true);
+CREATE POLICY "service_all_seo_pages"
+  ON seo_pages FOR ALL USING (auth.role() = 'service_role');

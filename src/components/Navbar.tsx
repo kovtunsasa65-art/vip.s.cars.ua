@@ -4,24 +4,38 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { PHONE_RAW, PHONE_DISPLAY } from '../lib/config';
+import { useSiteSettings } from '../lib/SiteSettingsContext';
 import { useCompare } from '../lib/useCompare';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { count: compareCount, compareUrl } = useCompare();
+  const { phone: PHONE_RAW, phoneDisplay: PHONE_DISPLAY } = useSiteSettings();
+
+  const loadRole = async (userId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+    setIsAdmin(data?.role === 'admin' || data?.role === 'manager');
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      if (session?.user) loadRole(session.user.id);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) loadRole(session.user.id);
+      else setIsAdmin(false);
     });
 
     const handleScroll = () => {
@@ -107,16 +121,16 @@ export default function Navbar() {
             <Search size={18} />
           </button>
 
-          <a
-            href="#contact"
+          <Link
+            to="#contact"
             className="bg-brand-blue text-white px-6 py-2.5 rounded-lg font-bold text-sm hover:bg-brand-blue-dark transition-all shadow-lg shadow-brand-blue/20"
           >
             Викуп авто
-          </a>
+          </Link>
 
           {user ? (
             <Link
-              to={user.email === 'kovtunsasa65@gmail.com' ? '/admin' : '/dashboard'}
+              to={isAdmin ? '/admin' : '/dashboard'}
               className="text-slate-400 hover:text-brand-blue transition-colors flex items-center justify-center p-2 bg-slate-50 rounded-full"
             >
               <User size={20} />
@@ -176,7 +190,7 @@ export default function Navbar() {
               </Link>
             ))}
             <Link
-              to={user ? (user.email === 'kovtunsasa65@gmail.com' ? '/admin' : '/dashboard') : '/login'}
+              to={user ? (isAdmin ? '/admin' : '/dashboard') : '/login'}
               className="mt-4 flex items-center justify-center gap-3 bg-brand-blue text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-brand-blue/20"
               onClick={() => setIsMobileMenuOpen(false)}
             >
@@ -202,7 +216,7 @@ export default function Navbar() {
           <span className="text-xs">Обране</span>
         </Link>
         <Link 
-          to={user ? (user.email === 'kovtunsasa65@gmail.com' ? '/admin' : '/dashboard') : '/login'} 
+          to={user ? (isAdmin ? '/admin' : '/dashboard') : '/login'} 
           className={cn("flex flex-col items-center text-slate-600 hover:text-brand-blue", (location.pathname === '/login' || location.pathname === '/dashboard' || location.pathname === '/admin') && "text-brand-blue")}
         >
           <User size={20} />

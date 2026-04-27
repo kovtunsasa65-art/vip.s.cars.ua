@@ -3,22 +3,49 @@ import { Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Loader2 } from 'lucide-react';
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const [loading, setLoading] = useState(true);
-  const [authenticated, setAuthenticated] = useState(false);
+interface Props {
+  children: React.ReactNode;
+  requiredRole?: 'admin' | 'manager' | 'editor';
+}
+
+export default function ProtectedRoute({ children, requiredRole }: Props) {
+  const [loading, setLoading]     = useState(true);
+  const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAuthenticated(!!session);
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        setLoading(false);
+        return;
+      }
+
+      if (requiredRole) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        // admin має доступ до всього; інші ролі — лише до свого рівня
+        const role = profile?.role ?? 'user';
+        const allowed = role === 'admin' || role === requiredRole;
+        setAuthorized(allowed);
+      } else {
+        // Без вимоги ролі — достатньо бути авторизованим
+        setAuthorized(true);
+      }
+
       setLoading(false);
-    });
+    })();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthenticated(!!session);
+      if (!session) setAuthorized(false);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [requiredRole]);
 
   if (loading) {
     return (
@@ -28,7 +55,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     );
   }
 
-  if (!authenticated) {
+  if (!authorized) {
     return <Navigate to="/login" replace />;
   }
 

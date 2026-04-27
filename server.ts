@@ -351,38 +351,44 @@ async function startServer() {
   // ── /sitemap.xml ─────────────────────────────────────────
   app.get("/sitemap.xml", async (_req, res) => {
     try {
+      // Лише активні авто, id як fallback якщо немає seo_slug
       const { data: cars } = await sb
         .from("cars")
-        .select("seo_slug, updated_at")
-        .eq("status", "active");
+        .select("id, seo_slug, updated_at")
+        .eq("status", "active")
+        .order("updated_at", { ascending: false });
 
       const staticPages = [
-        { url: "/",           priority: "1.0", changefreq: "daily" },
-        { url: "/catalog",    priority: "0.9", changefreq: "daily" },
+        { url: "/",           priority: "1.0", changefreq: "daily"  },
+        { url: "/catalog",    priority: "0.9", changefreq: "daily"  },
         { url: "/avtopidbir", priority: "0.8", changefreq: "weekly" },
         { url: "/vykup",      priority: "0.8", changefreq: "weekly" },
         { url: "/perevirka",  priority: "0.7", changefreq: "weekly" },
+        { url: "/reviews",    priority: "0.6", changefreq: "monthly"},
+        { url: "/about",      priority: "0.5", changefreq: "monthly"},
       ];
 
-      const SITE = "https://vip-s-cars.com";
+      const SITE  = "https://vip-s-cars.com";
       const today = new Date().toISOString().slice(0, 10);
 
-      let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+      let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
 
       staticPages.forEach(p => {
         xml += `\n  <url><loc>${SITE}${p.url}</loc><lastmod>${today}</lastmod><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority></url>`;
       });
 
       (cars ?? []).forEach((c: any) => {
-        const slug = c.seo_slug;
-        if (!slug) return;
-        const mod = c.updated_at ? c.updated_at.slice(0, 10) : today;
+        const slug = c.seo_slug ?? c.id;   // fallback на числовий ID
+        const mod  = c.updated_at ? c.updated_at.slice(0, 10) : today;
         xml += `\n  <url><loc>${SITE}/cars/${slug}</loc><lastmod>${mod}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`;
       });
 
       xml += "\n</urlset>";
-      res.header("Content-Type", "application/xml").send(xml);
+
+      res
+        .set("Content-Type", "text/xml; charset=utf-8")
+        .set("Cache-Control", "public, max-age=3600") // кеш на 1 годину
+        .send(xml);
     } catch (err: any) {
       res.status(500).send("Sitemap error: " + err.message);
     }

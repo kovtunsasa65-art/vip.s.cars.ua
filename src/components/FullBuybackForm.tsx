@@ -60,45 +60,62 @@ export default function FullBuybackForm({ onSuccess, embedded = false }: FullBuy
     setIsSubmitting(true);
 
     try {
-      // 1. Зберігаємо в Supabase Leads
+      // 1. Завантажуємо фото в Supabase Storage
+      const photoUrls: string[] = [];
+      for (let i = 0; i < images.length; i++) {
+        const file = images[i];
+        const ext = file.name.split('.').pop() ?? 'jpg';
+        const filePath = `buyback/${Date.now()}-${i}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('cars-media')
+          .upload(filePath, file, { upsert: true });
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage.from('cars-media').getPublicUrl(filePath);
+          photoUrls.push(publicUrl);
+        }
+      }
+
+      // 2. Зберігаємо в Supabase Leads
+      // Поля telegram/car_brand/car_model відсутні в схемі — включаємо в message
+      const messageText = [
+        form.brand       && `Марка: ${form.brand}`,
+        form.model       && `Модель: ${form.model}`,
+        form.year        && `Рік: ${form.year}`,
+        form.engineVolume && `Об'єм: ${form.engineVolume}л`,
+        form.transmission && `КПП: ${form.transmission}`,
+        form.mileage     && `Пробіг: ${form.mileage} тис.км`,
+        form.telegram    && `Telegram: @${form.telegram.replace('@', '')}`,
+        form.description && `Опис: ${form.description}`,
+        photoUrls.length  && `Фото: ${photoUrls.join(', ')}`,
+      ].filter(Boolean).join('\n');
+
       const { error: leadError } = await supabase.from('leads').insert([{
-        type: 'викуп',
-        name: form.name || `Викуп: ${form.brand} ${form.model}`,
-        phone: form.phone,
-        telegram: form.telegram,
-        car_brand: form.brand,
-        car_model: form.model,
-        message: [
-          form.brand && `Марка: ${form.brand}`,
-          form.model && `Модель: ${form.model}`,
-          form.year && `Рік: ${form.year}`,
-          form.engineVolume && `Об'єм: ${form.engineVolume}л`,
-          form.transmission && `КПП: ${form.transmission}`,
-          form.mileage && `Пробіг: ${form.mileage} тис.км`,
-          form.telegram && `Telegram: @${form.telegram.replace('@', '')}`,
-          form.description && `Опис: ${form.description}`,
-        ].filter(Boolean).join('\n'),
-        source: 'сайт / повна форма',
-        status: 'новий',
-        score: 'гарячий',
+        type:        'викуп',
+        name:        form.name || `Викуп: ${form.brand} ${form.model}`,
+        phone:       form.phone,
+        message:     messageText,
+        source_page: 'сайт / форма викупу',
+        status:      'new',
+        score:       'гарячий',
       }]);
 
       if (leadError) throw leadError;
 
-      // 2. Telegram повідомлення (через API роут)
-      const text = [
-        '<b>💰 НОВА ЗАЯВКА НА ВИКУП (ПОВНА)</b>',
+      // 3. Telegram повідомлення
+      const tgText = [
+        '<b>💰 НОВА ЗАЯВКА НА ВИКУП</b>',
         '───────────────────',
         `👤 <b>Ім'я:</b> ${form.name || 'Не вказано'}`,
         `📞 <b>Тел:</b> <a href="tel:${form.phone}">${form.phone}</a>`,
-        form.telegram && `✈️ <b>Telegram:</b> @${form.telegram.replace('@', '')}`,
-        form.brand && `🚗 <b>Марка:</b> ${form.brand}`,
-        form.model && `🚙 <b>Модель:</b> ${form.model}`,
-        form.year && `📅 <b>Рік:</b> ${form.year}`,
+        form.telegram    && `✈️ <b>Telegram:</b> @${form.telegram.replace('@', '')}`,
+        form.brand       && `🚗 <b>Марка:</b> ${form.brand}`,
+        form.model       && `🚙 <b>Модель:</b> ${form.model}`,
+        form.year        && `📅 <b>Рік:</b> ${form.year}`,
         form.engineVolume && `⚙️ <b>Об'єм:</b> ${form.engineVolume} л`,
         form.transmission && `🔧 <b>КПП:</b> ${form.transmission}`,
-        form.mileage && `📍 <b>Пробіг:</b> ${form.mileage} тис. км`,
+        form.mileage     && `📍 <b>Пробіг:</b> ${form.mileage} тис. км`,
         form.description && `💬 <b>Опис:</b> ${form.description}`,
+        photoUrls.length  && `🖼 Фото: ${photoUrls.length} шт.`,
         '───────────────────',
         `<i>VIP.S CARS • ${new Date().toLocaleString('uk-UA')}</i>`,
       ].filter(Boolean).join('\n');
@@ -106,7 +123,7 @@ export default function FullBuybackForm({ onSuccess, embedded = false }: FullBuy
       await fetch('/api/notify-buyback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, photos: previews }),
+        body: JSON.stringify({ message: tgText, photos: previews }),
       });
 
       setStep(3);

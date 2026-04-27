@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Check, ChevronRight, ChevronLeft, Save, 
   Camera, Sparkles, Search, Globe, 
@@ -142,9 +142,34 @@ export default function CarForm({ initialData, onSave, onCancel }: any) {
                           placeholder="0.00" value={formData.price} onChange={e => updateField('price', e.target.value)} />
                       </div>
                       <div className="space-y-2 col-span-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">VIN Код (17 символів)</label>
-                        <input type="text" maxLength={17} className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-5 py-4 text-sm font-black focus:border-brand-blue outline-none transition-all uppercase tracking-widest"
-                          placeholder="XXXXXXXXXXXXXXXXX" value={formData.vin} onChange={e => updateField('vin', e.target.value.toUpperCase())} />
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                          VIN Код (17 символів)
+                          {formData.vin && formData.vin.length !== 17 && (
+                            <span className="ml-2 text-red-500 normal-case">— потрібно 17 символів</span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={17}
+                          className={cn(
+                            "w-full bg-slate-50 border-2 rounded-2xl px-5 py-4 text-sm font-black outline-none transition-all uppercase tracking-widest",
+                            formData.vin && formData.vin.length === 17
+                              ? "border-green-400 bg-green-50/30"
+                              : formData.vin
+                              ? "border-red-300 bg-red-50/20"
+                              : "border-slate-50 focus:border-brand-blue"
+                          )}
+                          placeholder="XXXXXXXXXXXXXXXXX"
+                          value={formData.vin}
+                          onChange={e => {
+                            // Заборонені символи VIN: I, O, Q
+                            const cleaned = e.target.value.toUpperCase().replace(/[IOQ]/g, '');
+                            updateField('vin', cleaned);
+                          }}
+                        />
+                        {formData.vin && /[IOQ]/.test(formData.vin.toUpperCase()) && (
+                          <p className="text-xs text-red-500 font-semibold ml-1">VIN не може містити літери I, O, Q</p>
+                        )}
                       </div>
                     </div>
                   </div>

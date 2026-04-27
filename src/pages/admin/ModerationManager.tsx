@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Check, X, AlertCircle, RefreshCw, Clock, ExternalLink } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -17,7 +17,7 @@ export default function ModerationManager() {
     setLoading(true);
     const { data, error } = await supabase
       .from('cars')
-      .select('*')
+      .select('*, car_images(url, is_cover, sort_order)')
       .eq('status', 'moderation')
       .order('created_at', { ascending: false });
 
@@ -44,8 +44,9 @@ export default function ModerationManager() {
       if (error) throw error;
 
       toast.success(
-        newStatus === 'available' ? 'Оголошення опубліковано!' :
-        newStatus === 'revision' ? 'Надіслано на доопрацювання' : 'Оголошення відхилено',
+        newStatus === 'active'   ? 'Оголошення опубліковано!' :
+        newStatus === 'draft'    ? 'Надіслано на доопрацювання' :
+        newStatus === 'rejected' ? 'Оголошення відхилено' : 'Статус оновлено',
         { id: toastId }
       );
 
@@ -102,11 +103,17 @@ export default function ModerationManager() {
                 className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex flex-col lg:flex-row gap-6 group hover:shadow-xl hover:shadow-slate-200/50 transition-all"
               >
                 <div className="w-full lg:w-80 aspect-[16/10] bg-slate-100 rounded-2xl overflow-hidden shrink-0 relative border border-slate-100">
-                   <img src={car.images?.[0] || 'https://via.placeholder.com/400x250'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                   {(() => {
+                     const coverImg = car.car_images?.find((i: any) => i.is_cover)?.url
+                       ?? car.car_images?.[0]?.url;
+                     return coverImg
+                       ? <img src={coverImg} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={car.title} />
+                       : <div className="w-full h-full flex items-center justify-center text-slate-300"><AlertCircle size={40} /></div>;
+                   })()}
                    <div className="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[10px] font-black text-white uppercase tracking-widest italic">
                      ID: #{car.id}
                    </div>
-                   {car.source === 'client_form' && (
+                   {car.source_page?.includes('client') && (
                      <div className="absolute bottom-4 right-4 px-2 py-1 bg-brand-blue text-white rounded-md text-[8px] font-black uppercase tracking-widest shadow-lg">
                        Від клієнта
                      </div>
@@ -116,7 +123,7 @@ export default function ModerationManager() {
                 <div className="flex-1 space-y-4">
                    <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">{car.make} {car.model} · {car.year}</h3>
+                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">{car.brand} {car.model} · {car.year}</h3>
                         <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-1">
                           {format(new Date(car.created_at), 'dd MMMM, HH:mm')} · Ціна: ${car.price?.toLocaleString()}
                         </p>
@@ -139,22 +146,22 @@ export default function ModerationManager() {
                          <span className="text-[10px] font-black uppercase tracking-widest">Параметри:</span>
                       </div>
                       <div className="grid grid-cols-2 gap-4 mt-2">
-                        <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Пробіг: {car.mileage} км</div>
-                        <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Двигун: {car.engine}</div>
-                        <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">КПП: {car.transmission}</div>
-                        <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Паливо: {car.fuel}</div>
+                        <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Пробіг: {car.mileage ? Math.round(car.mileage / 1000) + ' тис.км' : '—'}</div>
+                        <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Двигун: {car.engine_volume ? `${car.engine_volume}л` : '—'}</div>
+                        <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">КПП: {car.transmission ?? '—'}</div>
+                        <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Паливо: {car.engine_type ?? '—'}</div>
                       </div>
                    </div>
 
                    <div className="flex flex-wrap gap-2 pt-2">
                       <button 
-                        onClick={() => handleAction(car.id, 'available')}
+                        onClick={() => handleAction(car.id, 'active')}
                         className="px-8 py-3.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-600 transition-all flex items-center gap-2 shadow-lg hover:shadow-green-500/20"
                       >
                         <Check size={14} /> Опублікувати
                       </button>
                       <button 
-                        onClick={() => handleAction(car.id, 'revision')}
+                        onClick={() => handleAction(car.id, 'draft')}
                         className="px-8 py-3.5 bg-white border border-slate-200 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:text-amber-600 hover:border-amber-200 transition-all"
                       >
                         На доопрацювання

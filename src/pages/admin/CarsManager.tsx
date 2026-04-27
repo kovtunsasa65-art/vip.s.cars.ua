@@ -10,7 +10,7 @@ import { toast } from 'react-hot-toast';
 import CarForm from './CarForm';
 import { cn } from '../../lib/utils';
 import { format } from 'date-fns';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function CarsManager() {
   const [cars, setCars] = useState<any[]>([]);
@@ -93,6 +93,41 @@ export default function CarsManager() {
     }, 1000);
   };
 
+  const deleteCar = async (carId: number) => {
+    if (!confirm('Видалити авто і всі фотографії? Цю дію не можна скасувати.')) return;
+    const toastId = toast.loading('Видалення...');
+    try {
+      // 1. Отримуємо список фото зі Storage
+      const { data: images } = await supabase
+        .from('car_images')
+        .select('url')
+        .eq('car_id', carId);
+
+      // 2. Видаляємо файли зі Storage (витягуємо шлях з публічного URL)
+      if (images?.length) {
+        const paths = images
+          .map(img => {
+            const marker = '/cars-media/';
+            const idx = img.url.indexOf(marker);
+            return idx >= 0 ? img.url.slice(idx + marker.length) : null;
+          })
+          .filter((p): p is string => !!p);
+        if (paths.length) {
+          await supabase.storage.from('cars-media').remove(paths);
+        }
+      }
+
+      // 3. Видаляємо запис авто (ON DELETE CASCADE прибирає car_images)
+      const { error } = await supabase.from('cars').delete().eq('id', carId);
+      if (error) throw error;
+
+      setCars(prev => prev.filter(c => c.id !== carId));
+      toast.success('Авто видалено', { id: toastId });
+    } catch (err: any) {
+      toast.error('Помилка: ' + err.message, { id: toastId });
+    }
+  };
+
   const filteredCars = cars.filter(car => {
     const matchesSearch = `${car.make} ${car.model}`.toLowerCase().includes(searchTerm.toLowerCase());
     if (!matchesSearch) return false;
@@ -124,10 +159,61 @@ export default function CarsManager() {
       <CarForm 
         initialData={editingId ? cars.find(c => c.id === editingId) : null}
         onSave={async (d: any) => {
-          await supabase.from('cars').upsert(d);
-          setIsAdding(false);
-          setEditingId(null);
-          fetchCars();
+          const toastId = toast.loading('Збереження...');
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+
+            // Маппінг полів форми → схема БД
+            const carPayload: any = {
+              brand:          d.make   || d.brand  || '',
+              model:          d.model  || '',
+              year:           Number(d.year) || new Date().getFullYear(),
+              price:          Number(d.price) || 0,
+              currency:       'USD',
+              vin:            d.vin    || null,
+              engine_volume:  parseFloat(d.engine) || null,
+              engine_type:    d.fuel?.toLowerCase()          || null,
+              transmission:   d.transmission?.toLowerCase()  || null,
+              mileage:        Number(d.mileage) * 1000       || 0,
+              description:    d.description   || null,
+              seo_title:      d.seo_title      || null,
+              seo_description:d.seo_description || null,
+              trust_score:    Number(d.trust_score) || 0,
+              status:         d.status || 'moderation',
+              city:           d.city   || 'Київ',
+              title:          `${d.make || d.brand} ${d.model} ${d.year}`.trim(),
+              user_id:        user?.id || null,
+            };
+            if (d.id) carPayload.id = d.id;
+
+            const { data: saved, error: carError } = await supabase
+              .from('cars')
+              .upsert(carPayload)
+              .select('id')
+              .single();
+            if (carError) throw carError;
+
+            // Зберігаємо зображення в car_images
+            if (d.images?.length && saved?.id) {
+              if (d.id) await supabase.from('car_images').delete().eq('car_id', d.id);
+              await supabase.from('car_images').insert(
+                d.images.map((url: string, i: number) => ({
+                  car_id:    saved.id,
+                  url,
+                  url_webp:  url,
+                  is_cover:  i === 0,
+                  sort_order:i,
+                }))
+              );
+            }
+
+            toast.success('Авто збережено!', { id: toastId });
+            setIsAdding(false);
+            setEditingId(null);
+            fetchCars();
+          } catch (err: any) {
+            toast.error('Помилка: ' + err.message, { id: toastId });
+          }
         }} 
         onCancel={() => { setIsAdding(false); setEditingId(null); }} 
       />
@@ -189,7 +275,7 @@ export default function CarsManager() {
           
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mr-2">Статус:</span>
-            {['available', 'moderation', 'sold', 'revision'].map(s => (
+            {['active', 'moderation', 'paused', 'sold', 'rejected'].map(s => (
               <button key={s} onClick={() => toggleStatusFilter(s)}
                 className={cn("px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border transition-all",
                   filters.status.includes(s) ? "bg-brand-blue text-white border-brand-blue" : "bg-white text-slate-500 border-slate-200")}>
@@ -262,9 +348,11 @@ export default function CarsManager() {
                   </td>
                   <td className="px-4 py-4 text-center">
                     <span className={cn("text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border shadow-sm",
-                      car.status === 'available' ? "bg-green-50 text-green-600 border-green-100" :
+                      car.status === 'active'     ? "bg-green-50 text-green-600 border-green-100" :
                       car.status === 'moderation' ? "bg-amber-50 text-amber-600 border-amber-100" :
-                      "bg-slate-100 text-slate-500 border-slate-200")}>
+                      car.status === 'paused'     ? "bg-blue-50 text-blue-500 border-blue-100" :
+                      car.status === 'sold'       ? "bg-slate-50 text-slate-400 border-slate-200" :
+                      "bg-red-50 text-red-400 border-red-100")}>
                       {car.status}
                     </span>
                   </td>
@@ -296,7 +384,7 @@ export default function CarsManager() {
                       <button onClick={() => setEditingId(car.id)} className="p-3 hover:bg-white rounded-2xl border border-transparent hover:border-slate-100 text-slate-400 hover:text-brand-blue hover:shadow-xl transition-all">
                         <Edit3 size={18} />
                       </button>
-                      <button className="p-3 hover:bg-white rounded-2xl border border-transparent hover:border-slate-100 text-slate-400 hover:text-red-500 hover:shadow-xl transition-all">
+                      <button onClick={() => deleteCar(car.id)} className="p-3 hover:bg-white rounded-2xl border border-transparent hover:border-slate-100 text-slate-400 hover:text-red-500 hover:shadow-xl transition-all">
                         <Trash2 size={18} />
                       </button>
                     </div>

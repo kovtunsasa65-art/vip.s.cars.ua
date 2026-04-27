@@ -4,6 +4,7 @@ import LeadFormBlock from '../components/LeadFormBlock';
 import FAQ from '../components/FAQ';
 import Reviews from '../components/Reviews';
 import { ServiceContent } from '../config/servicePages';
+import { useSeoPage } from '../lib/useSeoPage';
 
 export default function ServicePage({ data }: { data: ServiceContent }) {
   const {
@@ -19,9 +20,16 @@ export default function ServicePage({ data }: { data: ServiceContent }) {
     form,
   } = data;
 
+  // Slug без лідного "/" (напр. "avtopidbir")
+  const seo = useSeoPage(data.path.replace(/^\//, ''));
+
   return (
     <>
-      <SEOHead title={title} description={heroDescription} url={data.path} />
+      <SEOHead
+        title={seo.seo_title || title}
+        description={seo.seo_desc || heroDescription}
+        url={data.path}
+      />
       <div className="min-h-screen bg-slate-50 pb-20">
         {/* Hero */}
         <section className="bg-white border-b border-slate-100 py-16">
